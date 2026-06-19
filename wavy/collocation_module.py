@@ -190,7 +190,7 @@ def get_model_filename(nID, d, leadtime, **kwargs):
 
 
 def find_valid_fc_dates_for_model_and_leadtime(fc_dates, model,
-                                               leadtime, colloc_time_method,
+                                               leadtime, colloc_time_method,model_name=None,
                                                **kwargs):
     '''
     Finds valid dates that are close to desired dates at a precision
@@ -206,7 +206,7 @@ def find_valid_fc_dates_for_model_and_leadtime(fc_dates, model,
     #    pass
     #else:
     fc_dates_new = [d for d in fc_dates_new
-                    if get_model_filename(model, d, leadtime, **kwargs)
+                    if get_model_filename(model, d, leadtime, model_name=model_name, **kwargs)
                     is not None]
     print(fc_dates_new)
     return fc_dates_new
@@ -282,10 +282,10 @@ class collocation_class(qls):
             self.varalias_obs = [self.varalias_obs]
         self.varalias_mod = self.varalias
         self.model = model
+        self.model_name = kwargs.get('model_name', None)
         self.leadtime = leadtime
         self.oco = oco
         self.nID = oco.nID
-        self.model = model
         self.obstype = str(type(oco))[8:-2]
         self.units = [variable_def[v].get('units') for v in self.varalias]
         self.stdvarname = [variable_def[v].get('standard_name') for v in\
@@ -521,7 +521,7 @@ class collocation_class(qls):
 
         ndt_valid = find_valid_fc_dates_for_model_and_leadtime(
                                     ndt, self.model, self.leadtime,
-                                    self.colloc_time_method, **kwargs)
+                                    self.colloc_time_method,model_name=self.model_name, **kwargs)
 
         ndt_valid = np.unique(ndt_valid)
 
@@ -593,6 +593,7 @@ class collocation_class(qls):
                     logger.info(self.varalias_mod)
                     mco = mc(sd=fc_date[i], ed=fc_date[i], 
                              nID=self.model,
+                             name=self.model_name,
                              leadtime=self.leadtime, 
                              varalias=self.varalias_mod,
                              **kwargs)
