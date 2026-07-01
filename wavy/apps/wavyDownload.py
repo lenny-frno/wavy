@@ -26,8 +26,14 @@ from wavy.wconfig import load_or_default
 @click.option('--nproc', type=int, default=None,
         help='chosen number of simultaneous processes (only valid for FTP downloads)')
 @click.option('--path', type=str, default=None, help='custom specified target path')
+@click.option('--path', type=str, default=None, help='custom specified target path')
+@click.option('--mx_lt', type=float, default=None, help='maximum latitude for spatial subset')
+@click.option('--mn_lt', type=float, default=None, help='minimum latitude for spatial subset')
+@click.option('--mx_ln', type=float, default=None, help='maximum longitude for spatial subset')
+@click.option('--mn_ln', type=float, default=None, help='minimum longitude for spatial subset')
 
-def main(sd, ed, nid, name, path, nproc):
+
+def main(sd, ed, nid, name, path, nproc, mx_lt, mn_lt, mx_ln, mn_ln):
     """
     Wrapper for command line use of the wavy downloading functions.\n
 
@@ -91,7 +97,8 @@ def main(sd, ed, nid, name, path, nproc):
 
         sco = sc(sd=sdate, ed=edate,
                  nID=nid, name=name)
-        sco.download(path=path, nproc=nproc)
+        #sco.download(path=path, nproc=nproc)
+        sco.download(path=path, nproc=nproc, mx_lt=mx_lt, mn_lt=mn_lt, mx_ln=mx_ln, mn_ln=mn_ln)
 
         time1 = time.time() - start_time
         print("Time used for collecting data: ", time1, " seconds")

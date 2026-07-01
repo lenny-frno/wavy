@@ -171,8 +171,8 @@ class satellite_class(qls, fc):
         logger.info("Downloading files ...")
         #kwargs_in = vars(self)
         #kwargs_in['path'] = path
-        self.collector(nproc=nproc, path=path, **vars(self))
-
+        #self.collector(nproc=nproc, path=path, **vars(self))
+        self.collector(nproc=nproc, path=path, **vars(self), **kwargs)
 
     def _get_files(self, dict_for_sub=None, path=None, wavy_path=None,
     **kwargs):
