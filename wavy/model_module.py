@@ -559,14 +559,14 @@ class model_class(qls):
         else:
             # if defined path local
             logger.info(" ## Find and list files ...")
-            # path = kwargs.get('path', None) #this causes an error : double path argument LH
-            # wavy_path = kwargs.get('wavy_path', None)
+            path = kwargs.pop('path', None) #this causes an error : double path argument LH
+            wavy_path = kwargs.pop('wavy_path', None)
         
 
             pathlst, _ = self._get_files(vars(self),
-                                        #  path=path,
-                                        #  wavy_path=wavy_path,
-                                         **kwargs)
+                                          path=path,
+                                          wavy_path=wavy_path,
+                                          **kwargs)
 
         if show is True:
             print(" ")

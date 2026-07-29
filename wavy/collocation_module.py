@@ -184,13 +184,13 @@ def collocation_fct(obs_lons, obs_lats, model_lons, model_lats):
 
 
 def get_model_filename(nID, d, leadtime, **kwargs):
-    mco = mc(nID=nID, sd=d, ed=d, leadtime=leadtime)
+    mco = mc(nID=nID,name=kwargs.get('name',None), sd=d, ed=d, leadtime=leadtime)
     return mco._make_model_filename_wrapper(parse_date(str(d)),
                                             leadtime, **kwargs)
 
 
 def find_valid_fc_dates_for_model_and_leadtime(fc_dates, model,
-                                               leadtime, colloc_time_method,model_name=None,
+                                               leadtime, colloc_time_method,name=None,
                                                **kwargs):
     '''
     Finds valid dates that are close to desired dates at a precision
@@ -206,9 +206,8 @@ def find_valid_fc_dates_for_model_and_leadtime(fc_dates, model,
     #    pass
     #else:
     fc_dates_new = [d for d in fc_dates_new
-                    if get_model_filename(model, d, leadtime, model_name=model_name, **kwargs)
+                    if get_model_filename(model, d, leadtime, name=name, **kwargs)
                     is not None]
-    print(fc_dates_new)
     return fc_dates_new
 
 
@@ -282,7 +281,7 @@ class collocation_class(qls):
             self.varalias_obs = [self.varalias_obs]
         self.varalias_mod = self.varalias
         self.model = model
-        self.model_name = kwargs.get('model_name', None)
+        self.name = kwargs.get('name', None)
         self.leadtime = leadtime
         self.oco = oco
         self.nID = oco.nID
@@ -301,6 +300,7 @@ class collocation_class(qls):
         self.res = kwargs.get('res',(0.5,0.5))
         print(" ")
         print(" ### Collocation_class object initialized ###")
+        print(f"nID: {self.nID}, model: {self.model}, name: {self.name}")
 
     def populate(self, **kwargs):
         logger = logging.getLogger(__name__)
@@ -521,7 +521,7 @@ class collocation_class(qls):
 
         ndt_valid = find_valid_fc_dates_for_model_and_leadtime(
                                     ndt, self.model, self.leadtime,
-                                    self.colloc_time_method,model_name=self.model_name, **kwargs)
+                                    self.colloc_time_method,name=self.name, **kwargs)
 
         ndt_valid = np.unique(ndt_valid)
 
