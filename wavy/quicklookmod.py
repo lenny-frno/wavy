@@ -7,6 +7,9 @@ import os
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from abc import abstractmethod
 import matplotlib.pyplot as plt
+import logging
+
+logger = logging.getLogger(__name__)
 
 # own imports
 from wavy.wconfig import load_or_default
@@ -38,17 +41,20 @@ class quicklook_class_sat:
         return:
             figures
         """
+        #TODO refactor different plotting functions into separate functions for clarity and maintainability
 
         import matplotlib as mpl
         import cmocean
-
+        log_level = str(kwargs.get('logging', 'WARNING').upper())
+        logger.setLevel(getattr(logging, log_level, logging.WARNING))
         # settings
         m = kwargs.get('m', a)
         ts = kwargs.get('ts', a)
         scat = kwargs.get('sc', False)
         hst = kwargs.get('hist', False)
         mode = kwargs.get('mode', 'comb')  # comb, indiv
-
+        logger.debug(f'quicklook kwargs: m={m}, ts={ts}, scat={scat}, hst={hst}, mode={mode}')
+        
         if isinstance(self.varalias, list):
             varalias = kwargs.get('varalias', self.varalias[0])
             assert varalias in self.varalias, "varalias must be one of {}"\
@@ -127,18 +133,19 @@ class quicklook_class_sat:
                     facecolor=cfeature.COLORS['land'])
             if projection is None:
                 projection = ccrs.PlateCarree()
+                logger.debug('projection not specified, using default: PlateCarree')
+            logger.info(f'projection: {projection}')
 
             lonmax, lonmin = np.max(plot_lons), np.min(plot_lons)
             latmax, latmin = np.max(plot_lats), np.min(plot_lats)
 
             fig = plt.figure()
             ax = fig.add_subplot(1, 1, 1, projection=projection)
-            #ax = fig.add_subplot(1, 1, 1, projection=ccrs.epsg(3857))
-
+            
             # add land
             ax.add_geometries(land.intersecting_geometries(
                     [-180, 180, 0, 90]),
-                    projection,
+                    crs=ccrs.PlateCarree(), # Be careful with the transform, it should be the same as the data here (lon,lat)
                     facecolor=cfeature.COLORS['land'],
                     edgecolor='black', linewidth=1,
                     zorder=zorder_land)
@@ -173,13 +180,14 @@ class quicklook_class_sat:
                 platsmax, platsmin = np.max(plats), np.min(plats)
                 plons = poi.vars.lons.data
                 plonsmax, plonsmin = np.max(plons), np.min(plons)
+                #COMMENT: Why is the track plotted twice? Once as a line and once as points? Is this intentional?
                 tc = ax.plot(plons, plats, color='cornflowerblue',
                              ls='-', lw=1,
-                             zorder=-1)
+                             zorder=-1, transform=ccrs.PlateCarree()) #use transform=ccrs.PlateCarree() to plot in lon/lat coordinates
                 tc = ax.plot(plons, plats, color='cornflowerblue',
                              ls='None', marker='o', ms=5,
                              markeredgecolor='k',
-                             zorder=-1)
+                             zorder=-1, transform=ccrs.PlateCarree())
                 lonmax, lonmin = np.max([lonmax, plonsmax]),\
                                  np.min([lonmin, plonsmin])
                 latmax, latmin = np.max([latmax, platsmax]),\
@@ -189,20 +197,20 @@ class quicklook_class_sat:
                 domain = kwargs.get('domain', 'lonlat')
                 number_of_seeds = kwargs.get('number_of_seeds', 100)
                 lons_perp, lats_perp, _, _, ls_idx_lst = \
-                    self._generate_xtrack_footprints(
+                    self._generate_xtrack_footprints( # ?? didnt find this function in the code, is it defined in the class?
                             domain=domain,
                             number_of_seeds=number_of_seeds)
                 sc2 = ax.scatter(lons_perp, lats_perp,
                                  s=.2, c='b', marker='.',
                                  edgecolor='face',
-                                 transform=projection)
+                                 transform=ccrs.PlateCarree())
             if len(plot_var.shape) > 1:
                 sc = ax.contourf(plot_lons.squeeze(),
                                  plot_lats.squeeze(),
                                  plot_var.squeeze(),
                                  cmap=cmap, levels=cflevels,
                                  vmin=vmin, vmax=vmax, norm=norm,
-                                 transform=projection,
+                                 transform=ccrs.PlateCarree(),
                                  transform_first=\
                                  kwargs.get('transform_first', False))
                 c = ax.contour(plot_lons.squeeze(),
@@ -210,7 +218,7 @@ class quicklook_class_sat:
                                plot_var.squeeze(),
                                levels=clevels,
                                colors='w', linewidths=0.3,
-                               transform=projection,
+                               transform=ccrs.PlateCarree(),
                                transform_first=\
                                kwargs.get('transform_first', False))
             else:
@@ -220,7 +228,7 @@ class quicklook_class_sat:
                             edgecolors='k',
                             linewidths=0.1,
                             cmap=cmap, norm=norm,
-                            transform=projection)
+                            transform=ccrs.PlateCarree())
 
             # axes for colorbar
             axins = inset_axes(ax,
@@ -242,19 +250,77 @@ class quicklook_class_sat:
 
             # - add extent
             if kwargs.get("map_extent_llon") is None:
-                lon_range = (lonmax - lonmin)
-                lat_range = (latmax - latmin)
+
                 map_extent_multiplicator = kwargs.get(
                     "map_extent_multiplicator", 0.1)
+
                 map_extent_multiplicator_lon = kwargs.get(
-                    "map_extent_multiplicator_lon", map_extent_multiplicator)
+                    "map_extent_multiplicator_lon",
+                    map_extent_multiplicator)
+
                 map_extent_multiplicator_lat = kwargs.get(
-                    "map_extent_multiplicator_lat", map_extent_multiplicator)
-                ax.set_extent([lonmin-lon_range*map_extent_multiplicator_lon,
-                               lonmax+lon_range*map_extent_multiplicator_lon,
-                               latmin-lat_range*map_extent_multiplicator_lat,
-                               latmax+lat_range*map_extent_multiplicator_lat],
-                              crs=projection)
+                    "map_extent_multiplicator_lat",
+                    map_extent_multiplicator)
+                logger.debug(f'map_extent_multiplicator_lon: {map_extent_multiplicator_lon}, map_extent_multiplicator_lat: {map_extent_multiplicator_lat}')
+                lon_range = lonmax - lonmin
+                lat_range = latmax - latmin
+                logger.debug(f"lon_range: {lon_range}, lat_range: {lat_range}")
+
+                # ---------------------------------------------------------
+                # Polar stereographic handling
+                # ---------------------------------------------------------
+                if isinstance(projection, (ccrs.Stereographic, ccrs.NorthPolarStereo, ccrs.SouthPolarStereo)):
+
+                    lat0 = projection._proj4_params.get('lat_0')
+
+                    if lat0 > 60:
+                        # Northern hemisphere polar view
+                        extent = [
+                            -180,
+                            180,
+                            max(
+                                30,
+                                latmin - lat_range * map_extent_multiplicator_lat
+                            ),
+                            90,
+                        ]
+                        logger.debug("Northern hemisphere projection detected")
+
+                    elif lat0 < -60:
+                        # Southern hemisphere polar view
+                        extent = [
+                            -180,
+                            180,
+                            -90,
+                            min(
+                                -30,
+                                latmax + lat_range * map_extent_multiplicator_lat
+                            ),
+                        ]
+                        logger.debug("Southern hemisphere projection detected")
+
+                    else:
+                        extent = [
+                            lonmin - lon_range * map_extent_multiplicator_lon,
+                            lonmax + lon_range * map_extent_multiplicator_lon,
+                            latmin - lat_range * map_extent_multiplicator_lat,
+                            latmax + lat_range * map_extent_multiplicator_lat,
+                        ]
+
+                else:
+                    extent = [
+                        lonmin - lon_range * map_extent_multiplicator_lon,
+                        lonmax + lon_range * map_extent_multiplicator_lon,
+                        latmin - lat_range * map_extent_multiplicator_lat,
+                        latmax + lat_range * map_extent_multiplicator_lat,
+                    ]
+
+                logger.debug(f"Final extent: {extent}") #BUG when latmin=40, and get Datarray with lon and lat range
+
+                ax.set_extent(
+                    extent,
+                    crs=ccrs.PlateCarree()
+                )
             elif kwargs.get('map_extent_llon') is False:
                 pass
             else:
@@ -262,7 +328,7 @@ class quicklook_class_sat:
                                kwargs.get("map_extent_ulon"),
                                kwargs.get("map_extent_llat"),
                                kwargs.get("map_extent_ulat")],
-                              crs=projection)
+                              crs=ccrs.PlateCarree())
 
             #ax.coastlines(color='k')
             if projection == ccrs.PlateCarree():
@@ -295,8 +361,8 @@ class quicklook_class_sat:
                                            .get('color','b'),
                                      marker=quicklook_dict[self.region]\
                                             ['poi'][poi]['marker'],
-                                     transform=projection)
-                ax.text(plon, plat, pname, transform=projection,
+                                     transform=ccrs.PlateCarree()) #switch from projection
+                ax.text(plon, plat, pname, transform=ccrs.PlateCarree(),
                         zorder=100)
             #fig.suptitle('', fontsize=16) # unused
             if kwargs.get("show", True) is True:
