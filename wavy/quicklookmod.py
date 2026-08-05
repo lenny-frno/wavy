@@ -1,6 +1,8 @@
 """
 Module for quicklook fct
+Module for quicklook fct
 """
+
 
 # imports
 import numpy as np
@@ -27,6 +29,10 @@ region_dict = load_or_default("region_cfg.yaml")
 variable_info = load_or_default("variable_def.yaml")
 model_dict = load_or_default("model_cfg.yaml")
 quicklook_dict = load_or_default("quicklook_cfg.yaml")
+region_dict = load_or_default("region_cfg.yaml")
+variable_info = load_or_default("variable_def.yaml")
+model_dict = load_or_default("model_cfg.yaml")
+quicklook_dict = load_or_default("quicklook_cfg.yaml")
 
 
 class quicklook_class_sat:
@@ -40,7 +46,12 @@ class quicklook_class_sat:
             assert varalias in self.varalias, "varalias must be one of {}".format(
                 self.varalias
             )
+            varalias = kwargs.get("varalias", self.varalias[0])
+            assert varalias in self.varalias, "varalias must be one of {}".format(
+                self.varalias
+            )
             assert isinstance(varalias, str), "varalias argument should be a string"
+            idx_units = np.argwhere(np.array(self.varalias) == varalias)[0][0]
             idx_units = np.argwhere(np.array(self.varalias) == varalias)[0][0]
             units_to_plot = self.units[idx_units]
         else:
@@ -75,8 +86,25 @@ class quicklook_class_sat:
                 + "specify with varalias."
             )
             plot_var = self.vars["obs_" + varalias]
+            assert "model_" + varalias in list_vars, (
+                "model_{}".format(varalias)
+                + " is missing in "
+                + "the dataset, if you would like to "
+                + "validate another variable, please "
+                + "specify with varalias."
+            )
+            assert "obs_" + varalias in list_vars, (
+                "obs_{}".format(varalias)
+                + " is missing in "
+                + "the dataset, if you would like to "
+                + "validate another variable, please "
+                + "specify with varalias."
+            )
+            plot_var = self.vars["obs_" + varalias]
             plot_lons = self.vars.obs_lons
             plot_lats = self.vars.obs_lats
+            plot_var_obs = self.vars["obs_" + varalias]
+            plot_var_model = self.vars["model_" + varalias]
             plot_var_obs = self.vars["obs_" + varalias]
             plot_var_model = self.vars["model_" + varalias]
 
@@ -85,7 +113,11 @@ class quicklook_class_sat:
                 plot_lons, plot_lats = np.meshgrid(plot_lons, plot_lats)
 
         fs = kwargs.get("fs", 12)
+        fs = kwargs.get("fs", 12)
 
+        vartype = variable_info[varalias].get("type", "default")
+        if kwargs.get("cmap") is None:
+            if vartype == "cyclic":
         vartype = variable_info[varalias].get("type", "default")
         if kwargs.get("cmap") is None:
             if vartype == "cyclic":
@@ -304,7 +336,19 @@ class quicklook_class_sat:
                 alpha=0.5,
                 ms=2,
             )
+            colors = ["k", "r"]
+            ax.plot(
+                self.vars["time"],
+                plot_var,
+                color=colors[0],
+                linestyle=kwargs.get("linestyle", ""),
+                label=self.nID,
+                marker="o",
+                alpha=0.5,
+                ms=2,
+            )
             try:
+                if "model" in vars(self):
                 if "model" in vars(self):
                     label_scdplot = self.model
                 else:
@@ -319,11 +363,24 @@ class quicklook_class_sat:
                     alpha=0.5,
                     ms=2,
                 )
+                ax.plot(
+                    self.vars["time"],
+                    plot_var_model,
+                    color=colors[1],
+                    linestyle=kwargs.get("linestyle", ""),
+                    label=label_scdplot,
+                    marker="o",
+                    alpha=0.5,
+                    ms=2,
+                )
             except Exception as e:
                 pass
             plt.ylabel(varalias + " [" + units_to_plot + "]")
             plt.legend(loc="best")
+            plt.ylabel(varalias + " [" + units_to_plot + "]")
+            plt.legend(loc="best")
             plt.tight_layout()
+            # ax.set_title()
             # ax.set_title()
             if kwargs.get("show", True) is True:
                 plt.show()
@@ -334,6 +391,16 @@ class quicklook_class_sat:
             ax = fig.add_subplot(111)
             for oco in self.ocos:
                 label = oco.name
+
+                ax.plot(
+                    oco.vars["time"],
+                    oco.vars[varalias],
+                    linestyle=kwargs.get("linestyle", ""),
+                    label=label,
+                    marker="o",
+                    alpha=0.5,
+                    ms=2,
+                )
 
                 ax.plot(
                     oco.vars["time"],
@@ -356,11 +423,24 @@ class quicklook_class_sat:
                     alpha=0.5,
                     ms=2,
                 )
+                ax.plot(
+                    self.vars["time"],
+                    plot_var_model,
+                    color=colors[1],
+                    linestyle=kwargs.get("linestyle", ""),
+                    label=label,
+                    marker="o",
+                    alpha=0.5,
+                    ms=2,
+                )
             except Exception as e:
                 pass
             plt.ylabel(varalias + " [" + units_to_plot + "]")
             plt.legend(loc="best")
+            plt.ylabel(varalias + " [" + units_to_plot + "]")
+            plt.legend(loc="best")
             plt.tight_layout()
+            # ax.set_title()
             # ax.set_title()
             if kwargs.get("show", True) is True:
                 plt.show()
