@@ -5,6 +5,9 @@ Coverage:
   - Pure utility functions: _check_projection, _set_lonlat_minmax,
     _set_polar_extent
   - quicklook_class_sat._check_varalias (via a minimal stub)
+  - quicklook_class_sat._PLOT_REGISTRY structure validation
+  - quicklook_class_sat._build_plot_context (via populated satellite object)
+  - needs_colloc guard in quicklook()
   - Integration: plot_timeseries and plot_map via satellite_class.quicklook()
     using the local L3 test data
 """
@@ -19,6 +22,7 @@ import cartopy.crs as ccrs
 from unittest.mock import MagicMock, patch
 
 from wavy.quicklookmod import (
+    PlotContext,
     _check_projection,
     _set_lonlat_minmax,
     _set_polar_extent,
@@ -197,6 +201,81 @@ def test_check_varalias_list_non_string_kwarg_raises():
 
 
 # ------------------------------------------------------------------ #
+# _PLOT_REGISTRY structure
+# ------------------------------------------------------------------ #
+
+_REQUIRED_SPEC_KEYS = {"method", "default", "needs_colloc"}
+
+
+def test_plot_registry_is_nonempty():
+    assert len(quicklook_class_sat._PLOT_REGISTRY) > 0
+
+
+def test_plot_registry_all_entries_have_required_keys():
+    for kwarg, spec in quicklook_class_sat._PLOT_REGISTRY.items():
+        assert _REQUIRED_SPEC_KEYS <= set(spec.keys()), (
+            f"Registry entry {kwarg!r} is missing keys: "
+            f"{_REQUIRED_SPEC_KEYS - set(spec.keys())}"
+        )
+
+
+def test_plot_registry_methods_exist_on_class():
+    for kwarg, spec in quicklook_class_sat._PLOT_REGISTRY.items():
+        assert hasattr(
+            quicklook_class_sat, spec["method"]
+        ), f"Registry entry {kwarg!r} references missing method {spec['method']!r}"
+
+
+def test_plot_registry_default_and_needs_colloc_are_bool():
+    for kwarg, spec in quicklook_class_sat._PLOT_REGISTRY.items():
+        assert isinstance(
+            spec["default"], bool
+        ), f"Registry entry {kwarg!r}: 'default' must be bool"
+        assert isinstance(
+            spec["needs_colloc"], bool
+        ), f"Registry entry {kwarg!r}: 'needs_colloc' must be bool"
+
+
+# ------------------------------------------------------------------ #
+# PlotContext dataclass
+# ------------------------------------------------------------------ #
+
+
+def test_plot_context_instantiation():
+    ctx = PlotContext(
+        varalias="Hs",
+        units="m",
+        plot_var=np.array([1.0, 2.0]),
+        plot_lons=np.array([0.0, 1.0]),
+        plot_lats=np.array([60.0, 61.0]),
+        plot_var_obs=None,
+        plot_var_model=None,
+        fs=12,
+        cmap=None,
+        projection=None,
+    )
+    assert ctx.varalias == "Hs"
+    assert ctx.mode == "comb"  # default
+
+
+def test_plot_context_mode_override():
+    ctx = PlotContext(
+        varalias="Hs",
+        units="m",
+        plot_var=None,
+        plot_lons=None,
+        plot_lats=None,
+        plot_var_obs=None,
+        plot_var_model=None,
+        fs=12,
+        cmap=None,
+        projection=None,
+        mode="indiv",
+    )
+    assert ctx.mode == "indiv"
+
+
+# ------------------------------------------------------------------ #
 # Integration tests – satellite_class.quicklook()
 # ------------------------------------------------------------------ #
 
@@ -227,6 +306,31 @@ def test_quicklook_timeseries_ylabel_contains_varalias(populated_sco):
     ylabel = ax.get_ylabel()
     assert "Hs" in ylabel
     plt.close(fig)
+
+
+def test_build_plot_context_returns_plot_context(populated_sco):
+    ctx = populated_sco._build_plot_context()
+    assert isinstance(ctx, PlotContext)
+    assert ctx.varalias == "Hs"
+    assert ctx.plot_var is not None
+    assert ctx.plot_lons is not None
+    assert ctx.plot_lats is not None
+
+
+def test_build_plot_context_no_colloc_data_has_none_obs_model(populated_sco):
+    ctx = populated_sco._build_plot_context()
+    # Satellite-only data: no obs_/model_ prefix → obs and model are None
+    assert ctx.plot_var_obs is None
+    assert ctx.plot_var_model is None
+
+
+def test_quicklook_needs_colloc_guard_skips_without_data(populated_sco):
+    """sc=True on non-collocated data should log a warning, not raise."""
+    fig, ax = populated_sco.quicklook(sc=True, show=False)
+    # No collocated data → guard skips; quicklook returns None when no plot made
+    # (or returns the last valid (fig, ax) from a non-colloc plot if also requested)
+    # Here only sc=True is set so nothing is plotted.
+    assert fig is None and ax is None
 
 
 def _mock_land():
