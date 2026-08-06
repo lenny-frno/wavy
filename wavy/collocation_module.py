@@ -6,6 +6,7 @@
 - Needs input from modules that retrieve from observational platforms
   and models
 """
+
 # --- import libraries ------------------------------------------------#
 # standard library imports
 import numpy as np
@@ -18,7 +19,8 @@ from copy import deepcopy
 import xarray as xr
 import pandas as pd
 import copy
-#import traceback
+
+# import traceback
 import logging
 
 # own imports
@@ -37,18 +39,19 @@ from wavy.gridder_module import gridder_class as gc
 from wavy.grid_stats import apply_metric
 from wavy.quicklookmod import quicklook_class_sat as qls
 from wavy.validationmod import validate, disp_validation
+
 # ---------------------------------------------------------------------#
 
 # read yaml config files:
-model_dict = load_or_default('model_cfg.yaml')
-insitu_dict = load_or_default('insitu_cfg.yaml')
-variable_def = load_or_default('variable_def.yaml')
+model_dict = load_or_default("model_cfg.yaml")
+insitu_dict = load_or_default("insitu_cfg.yaml")
+variable_def = load_or_default("variable_def.yaml")
 
 
 def collocate_observations(co1, co2, twin=5, dist_max=200):
-    '''
+    """
      Collocates observations from two wavy objects, keeping only closest
-     data from the second dataset within a given time range around each 
+     data from the second dataset within a given time range around each
      observation from the first given dataset.
 
     Args:
@@ -56,7 +59,7 @@ def collocate_observations(co1, co2, twin=5, dist_max=200):
                                                     the data from the second
                                                     dataset will be collocated
                                                     around this one.
-        co2 (insitu_class or satellite_class object): second observation 
+        co2 (insitu_class or satellite_class object): second observation
                                                       dataset
         twin (int): time window length in minutes
         dist_max (int | float): Maximum distance
@@ -66,14 +69,14 @@ def collocate_observations(co1, co2, twin=5, dist_max=200):
     Returns:
         tuple (co1_filter (insitu_class or satellite_class object),
                co2_filter (insitu_class or satellite_class object)): first and
-                                               second objects given as inputs, 
-                                               with data filtered to keep only 
+                                               second objects given as inputs,
+                                               with data filtered to keep only
                                                collocated observations
-    '''
+    """
     list_time_co2 = []
     list_time_co1 = []
     list_dist_min = []
-    datetimes_co1 = [pd.to_datetime(t) for t in co1.vars['time'].values]
+    datetimes_co1 = [pd.to_datetime(t) for t in co1.vars["time"].values]
 
     for i, time_co1 in enumerate(datetimes_co1):
 
@@ -83,7 +86,7 @@ def collocate_observations(co1, co2, twin=5, dist_max=200):
         time_sup = time_co1 + timedelta(minutes=twin)
         time_inf = time_co1 - timedelta(minutes=twin)
         ds_tmp = co2.vars.sel(time=slice(time_inf, time_sup))
-        ds_tmp_size = ds_tmp.sizes['time']
+        ds_tmp_size = ds_tmp.sizes["time"]
 
         # if some co2 data are found
         if ds_tmp_size > 0:
@@ -92,23 +95,14 @@ def collocate_observations(co1, co2, twin=5, dist_max=200):
             # lat and lon and adds it to ds_tmp
             # as variables
             co1_vars_tmp = co1.vars.isel(time=i)
-            lats_co1 = co1_vars_tmp['lats'].values
-            lons_co1 = co1_vars_tmp['lons'].values
+            lats_co1 = co1_vars_tmp["lats"].values
+            lons_co1 = co1_vars_tmp["lons"].values
 
             ds_tmp = ds_tmp.assign(
                 {
-                    'time_co1': (
-                        'time',
-                        np.repeat(time_co1, ds_tmp_size)
-                    ),
-                    'lats_co1': (
-                        'time',
-                        np.repeat(lats_co1, ds_tmp_size)
-                    ),
-                    'lons_co1': (
-                        'time',
-                        np.repeat(lons_co1, ds_tmp_size)
-                    )
+                    "time_co1": ("time", np.repeat(time_co1, ds_tmp_size)),
+                    "lats_co1": ("time", np.repeat(lats_co1, ds_tmp_size)),
+                    "lons_co1": ("time", np.repeat(lons_co1, ds_tmp_size)),
                 }
             )
 
@@ -116,31 +110,31 @@ def collocate_observations(co1, co2, twin=5, dist_max=200):
             # measurements and adds it as a variable to ds_tmp
             ds_tmp = ds_tmp.assign(
                 {
-                    'dist_co1_co2': (
-                        'time',
+                    "dist_co1_co2": (
+                        "time",
                         haversineA(
-                            ds_tmp['lons_co1'],
-                            ds_tmp['lats_co1'],
-                            ds_tmp['lons'],
-                            ds_tmp['lats']
-                        )[0]
+                            ds_tmp["lons_co1"],
+                            ds_tmp["lats_co1"],
+                            ds_tmp["lons"],
+                            ds_tmp["lats"],
+                        )[0],
                     )
                 }
             )
 
             # Calculates the minimum value for distances
-            min_dist_tmp = min(ds_tmp['dist_co1_co2'].values)
+            min_dist_tmp = min(ds_tmp["dist_co1_co2"].values)
 
             # If the minimum value is lesser than defined max distance
             if min_dist_tmp <= dist_max:
 
                 # Times for co1 and co2 measurements,
                 # corresponding to the minimum distance are fetched
-                dist = list(ds_tmp['dist_co1_co2'].values)
+                dist = list(ds_tmp["dist_co1_co2"].values)
                 ds_tmp = ds_tmp.isel(time=dist.index(min_dist_tmp))
-                list_time_co2.append(ds_tmp['time'].data)
+                list_time_co2.append(ds_tmp["time"].data)
                 list_dist_min.append(min_dist_tmp)
-                list_time_co1.append(ds_tmp['time_co1'].data)
+                list_time_co1.append(ds_tmp["time_co1"].data)
 
     co1_filter = copy.deepcopy(co1)
     co2_filter = copy.deepcopy(co2)
@@ -149,34 +143,26 @@ def collocate_observations(co1, co2, twin=5, dist_max=200):
     # lists of times corresponding to minimum distance
     # between co1 and co2 observation
     co2_filter.vars = co2_filter.vars.sel(time=list_time_co2)
-    co2_filter.vars = co2_filter.vars.assign(
-        {
-            'colloc_dist': (
-                'time',
-                list_dist_min
-            )
-        }
-    )
+    co2_filter.vars = co2_filter.vars.assign({"colloc_dist": ("time", list_dist_min)})
     co1_filter.vars = co1_filter.vars.sel(time=list_time_co1)
 
-    return co1_filter, co2_filter 
+    return co1_filter, co2_filter
 
 
 def collocation_fct(obs_lons, obs_lats, model_lons, model_lats):
-    grid = pyresample.geometry.GridDefinition(
-                                lats=model_lats,
-                                lons=model_lons)
+    grid = pyresample.geometry.GridDefinition(lats=model_lats, lons=model_lons)
     # Define some sample points
-    swath = pyresample.geometry.SwathDefinition(lons=obs_lons,
-                                                lats=obs_lats)
+    swath = pyresample.geometry.SwathDefinition(lons=obs_lons, lats=obs_lats)
     # Determine nearest (great circle distance) neighbour in the grid.
     # valid_input_index, valid_output_index, index_array, distance_array = \
-    _, valid_output_index, index_array, distance_array = \
-                            pyresample.kd_tree.get_neighbour_info(
-                                source_geo_def=grid,
-                                target_geo_def=swath,
-                                radius_of_influence=1000000000,
-                                neighbours=1)
+    _, valid_output_index, index_array, distance_array = (
+        pyresample.kd_tree.get_neighbour_info(
+            source_geo_def=grid,
+            target_geo_def=swath,
+            radius_of_influence=1000000000,
+            neighbours=1,
+        )
+    )
     # get_neighbour_info() returns indices in the
     # flattened lat/lon grid. Compute the 2D grid indices:
     index_array_2d = np.unravel_index(index_array, grid.shape)
@@ -184,56 +170,53 @@ def collocation_fct(obs_lons, obs_lats, model_lons, model_lats):
 
 
 def get_model_filename(nID, d, leadtime, **kwargs):
-    mco = mc(nID=nID,name=kwargs.get('name',None), sd=d, ed=d, leadtime=leadtime)
-    return mco._make_model_filename_wrapper(parse_date(str(d)),
-                                            leadtime, **kwargs)
+    mco = mc(nID=nID, name=kwargs.get("name", None), sd=d, ed=d, leadtime=leadtime)
+    return mco._make_model_filename_wrapper(parse_date(str(d)), leadtime, **kwargs)
 
 
-def find_valid_fc_dates_for_model_and_leadtime(fc_dates, model,
-                                               leadtime, colloc_time_method,name=None,
-                                               **kwargs):
-    '''
+def find_valid_fc_dates_for_model_and_leadtime(
+    fc_dates, model, leadtime, colloc_time_method, name=None, **kwargs
+):
+    """
     Finds valid dates that are close to desired dates at a precision
     of complete hours
-    '''
-    #fc_dates_new = hour_rounder_pd(fc_dates)
+    """
+    # fc_dates_new = hour_rounder_pd(fc_dates)
 
     dt_tmp = [parse_date(str(d)) for d in fc_dates]
     fc_dates_new = [hour_rounder(d, method=colloc_time_method) for d in dt_tmp]
 
     fc_dates_new = np.unique(fc_dates_new)
-    #if (leadtime is None or leadtime == 'best'):
+    # if (leadtime is None or leadtime == 'best'):
     #    pass
-    #else:
-    fc_dates_new = [d for d in fc_dates_new
-                    if get_model_filename(model, d, leadtime, name=name, **kwargs)
-                    is not None]
+    # else:
+    fc_dates_new = [
+        d
+        for d in fc_dates_new
+        if get_model_filename(model, d, leadtime, name=name, **kwargs) is not None
+    ]
     return fc_dates_new
 
 
 def check_if_file_is_valid(fc_date, model, leadtime, **kwargs):
     logger = logging.getLogger(__name__)
-    log_level = str(kwargs.get('logging', 'WARNING').upper())
+    log_level = str(kwargs.get("logging", "WARNING").upper())
     logger.setLevel(getattr(logging, log_level, logging.WARNING))
 
     fname = get_model_filename(model, fc_date, leadtime, **kwargs)
-    logger.info('Check if requested file:\n'
-                + str(fname)
-                + '\nis available and valid')
+    logger.info("Check if requested file:\n" + str(fname) + "\nis available and valid")
     try:
-        nc = netCDF4.Dataset(fname, mode='r')
-        time = nc.variables['time']
+        nc = netCDF4.Dataset(fname, mode="r")
+        time = nc.variables["time"]
         dt = netCDF4.num2date(time[:], time.units)
         if fc_date in list(dt):
-            logger.info('File is available and contains requested date')
+            logger.info("File is available and contains requested date")
             return True
         else:
-            logger.warning('Desired date '
-                           + str(fc_date) +
-                           ' is not in', fname)
+            logger.warning("Desired date " + str(fc_date) + " is not in", fname)
             return False
     except (FileNotFoundError, OSError) as e:
-        logger.error('File is not available or does not contain requested date')
+        logger.error("File is not available or does not contain requested date")
         logger.error(e)
         return False
 
@@ -241,9 +224,12 @@ def check_if_file_is_valid(fc_date, model, leadtime, **kwargs):
 def get_closest_date(overdetermined_lst, target_lst):
     idx = []
     for i in range(len(target_lst)):
-        diffs = np.abs([(target_lst[i]
-                        - overdetermined_lst[j]).total_seconds()
-                        for j in range(len(overdetermined_lst))])
+        diffs = np.abs(
+            [
+                (target_lst[i] - overdetermined_lst[j]).total_seconds()
+                for j in range(len(overdetermined_lst))
+            ]
+        )
         mindiff = np.min(diffs)
         idx.append(list(diffs).index(mindiff))
     return idx
@@ -258,13 +244,14 @@ def adjust_dict_for_idx(indict, idx, excl_keys_lst):
 
 
 class collocation_class(qls):
-    '''
+    """
     draft of envisioned collocation class object
-    '''
+    """
 
-    def __init__(self, oco=None, model=None, poi=None,
-                 leadtime=None, varalias=None, **kwargs):
-        print('# ----- ')
+    def __init__(
+        self, oco=None, model=None, poi=None, leadtime=None, varalias=None, **kwargs
+    ):
+        print("# ----- ")
         print(" ### Initializing collocation_class object ###")
         print(" ")
         # make clones to prevent overwriting
@@ -281,30 +268,29 @@ class collocation_class(qls):
             self.varalias_obs = [self.varalias_obs]
         self.varalias_mod = self.varalias
         self.model = model
-        self.name = kwargs.get('name', None)
+        self.name = kwargs.get("name", None)
         self.leadtime = leadtime
         self.oco = oco
         self.nID = oco.nID
         self.obstype = str(type(oco))[8:-2]
-        self.units = [variable_def[v].get('units') for v in self.varalias]
-        self.stdvarname = [variable_def[v].get('standard_name') for v in\
-                           self.varalias] 
+        self.units = [variable_def[v].get("units") for v in self.varalias]
+        self.stdvarname = [variable_def[v].get("standard_name") for v in self.varalias]
         self.region = oco.region
         self.sd = oco.sd
         self.ed = oco.ed
-        self.twin = kwargs.get('twin', oco.twin)
-        self.distlim = kwargs.get('distlim', 6)
-        self.method = kwargs.get('method', 'closest')
-        self.colloc_time_method = kwargs.get('colloc_time_method', 'nearest')
-        self.nproc = kwargs.get('nproc',16)
-        self.res = kwargs.get('res',(0.5,0.5))
+        self.twin = kwargs.get("twin", oco.twin)
+        self.distlim = kwargs.get("distlim", 6)
+        self.method = kwargs.get("method", "closest")
+        self.colloc_time_method = kwargs.get("colloc_time_method", "nearest")
+        self.nproc = kwargs.get("nproc", 16)
+        self.res = kwargs.get("res", (0.5, 0.5))
         print(" ")
         print(" ### Collocation_class object initialized ###")
         print(f"nID: {self.nID}, model: {self.model}, name: {self.name}")
 
     def populate(self, **kwargs):
         logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
+        log_level = str(kwargs.get("logging", "WARNING").upper())
         logger.setLevel(getattr(logging, log_level, logging.WARNING))
 
         new = deepcopy(self)
@@ -313,7 +299,7 @@ class collocation_class(qls):
         try:
             t0 = time.time()
             results_dict = new.collocate(**kwargs)
-            new.model_time = results_dict['model_time']
+            new.model_time = results_dict["model_time"]
             # build xarray dataset from results
             ds = new._build_xr_dataset(results_dict)
             ds = ds.assign_coords(time=ds.time.values)
@@ -321,123 +307,135 @@ class collocation_class(qls):
 
             # Add extra variables from oco
             list_vars_cco = list(new.vars.keys())
-            list_vars_oco = ['obs_' + v for v in list(new.oco.vars.keys())]
-            list_vars_extra = [v[4:] for v in list_vars_oco if v not in\
-                               list_vars_cco]
-            new.vars = new.vars.merge(new.oco.vars[list_vars_extra].\
-                              rename({v:'obs_'+v for v in list_vars_extra}), 
-                                     join='left')
+            list_vars_oco = ["obs_" + v for v in list(new.oco.vars.keys())]
+            list_vars_extra = [v[4:] for v in list_vars_oco if v not in list_vars_cco]
+            new.vars = new.vars.merge(
+                new.oco.vars[list_vars_extra].rename(
+                    {v: "obs_" + v for v in list_vars_extra}
+                ),
+                join="left",
+            )
 
             new = new._drop_duplicates(**kwargs)
             t1 = time.time()
             print(" ")
             print(" ## Summary:")
-            print(len(new.vars['time']), " values collocated.")
-            print("Time used for collocation:", round(t1-t0, 2), "seconds")
+            print(len(new.vars["time"]), " values collocated.")
+            print("Time used for collocation:", round(t1 - t0, 2), "seconds")
             print(" ")
 
         except Exception as e:
-            logger.warning('Exception occurred in collocation')
+            logger.warning("Exception occurred in collocation")
             logger.warning(e)
             new.error = e
             new.vars = None
             print("! collocation_class object may be empty !")
         # add class variables
-        print('# ----- ')
+        print("# ----- ")
 
         return new
 
     def _build_xr_dataset(self, results_dict, **kwargs):
         logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
+        log_level = str(kwargs.get("logging", "WARNING").upper())
         logger.setLevel(getattr(logging, log_level, logging.WARNING))
 
         try:
-            ds = xr.Dataset({
-                'time': xr.DataArray(
-                        data=results_dict['obs_time'],
-                        dims=['time'],
-                        coords={'time': results_dict['obs_time']},
-                        attrs=variable_def['time'],
-                        ),
-                'dist': xr.DataArray(
-                        data=results_dict['dist'],
-                        dims=['time'],
-                        coords={'time': results_dict['obs_time']},
-                        attrs=variable_def['dist'],
-                        ),
-                'obs_lons': xr.DataArray(
-                        data=results_dict['obs_lons'],
-                        dims=['time'],
-                        coords={'time': results_dict['obs_time']},
-                        attrs=variable_def['lons'],
-                        ),
-                'obs_lats': xr.DataArray(
-                        data=results_dict['obs_lats'],
-                        dims=['time'],
-                        coords={'time': results_dict['obs_time']},
-                        attrs=variable_def['lats'],
-                        ),
-                **{'obs_'+v:xr.DataArray(
-                        data=results_dict['obs_'+v],
-                        dims=['time'],
-                        coords={'time': results_dict['obs_time']},
-                        attrs=variable_def[v]) for v in self.varalias_obs},
-               'model_time': xr.DataArray(
-                        data=results_dict['model_time'],
-                        dims=['time'],
-                        coords={'time': results_dict['obs_time']},
-                        attrs={},
-                        ),
-                'model_lons': xr.DataArray(
-                        data=results_dict['model_lons'],
-                        dims=['time'],
-                        coords={'time': results_dict['obs_time']},
-                        attrs=variable_def['lons'],
-                        ),
-                'model_lats': xr.DataArray(
-                        data=results_dict['model_lats'],
-                        dims=['time'],
-                        coords={'time': results_dict['obs_time']},
-                        attrs=variable_def['lats'],
-                        ),
-                **{'model_'+v:xr.DataArray(
-                        data=results_dict['model_'+v],
-                        dims=['time'],
-                        coords={'time': results_dict['obs_time']},
-                        attrs=variable_def[v]) for v in self.varalias_mod},
-                'colidx_x': xr.DataArray(
-                        data=results_dict['collocation_idx_x'],
-                        dims=['time'],
-                        coords={'time': results_dict['obs_time']},
-                        attrs=variable_def['colidx_x'],
-                        ),
-                'colidx_y': xr.DataArray(
-                        data=results_dict['collocation_idx_y'],
-                        dims=['time'],
-                        coords={'time': results_dict['obs_time']},
-                        attrs=variable_def['colidx_y'],
-                        ),
+            ds = xr.Dataset(
+                {
+                    "time": xr.DataArray(
+                        data=results_dict["obs_time"],
+                        dims=["time"],
+                        coords={"time": results_dict["obs_time"]},
+                        attrs=variable_def["time"],
+                    ),
+                    "dist": xr.DataArray(
+                        data=results_dict["dist"],
+                        dims=["time"],
+                        coords={"time": results_dict["obs_time"]},
+                        attrs=variable_def["dist"],
+                    ),
+                    "obs_lons": xr.DataArray(
+                        data=results_dict["obs_lons"],
+                        dims=["time"],
+                        coords={"time": results_dict["obs_time"]},
+                        attrs=variable_def["lons"],
+                    ),
+                    "obs_lats": xr.DataArray(
+                        data=results_dict["obs_lats"],
+                        dims=["time"],
+                        coords={"time": results_dict["obs_time"]},
+                        attrs=variable_def["lats"],
+                    ),
+                    **{
+                        "obs_"
+                        + v: xr.DataArray(
+                            data=results_dict["obs_" + v],
+                            dims=["time"],
+                            coords={"time": results_dict["obs_time"]},
+                            attrs=variable_def[v],
+                        )
+                        for v in self.varalias_obs
                     },
-                attrs={'title': str(type(self))[8:-2] + ' dataset'}
-                )
+                    "model_time": xr.DataArray(
+                        data=results_dict["model_time"],
+                        dims=["time"],
+                        coords={"time": results_dict["obs_time"]},
+                        attrs={},
+                    ),
+                    "model_lons": xr.DataArray(
+                        data=results_dict["model_lons"],
+                        dims=["time"],
+                        coords={"time": results_dict["obs_time"]},
+                        attrs=variable_def["lons"],
+                    ),
+                    "model_lats": xr.DataArray(
+                        data=results_dict["model_lats"],
+                        dims=["time"],
+                        coords={"time": results_dict["obs_time"]},
+                        attrs=variable_def["lats"],
+                    ),
+                    **{
+                        "model_"
+                        + v: xr.DataArray(
+                            data=results_dict["model_" + v],
+                            dims=["time"],
+                            coords={"time": results_dict["obs_time"]},
+                            attrs=variable_def[v],
+                        )
+                        for v in self.varalias_mod
+                    },
+                    "colidx_x": xr.DataArray(
+                        data=results_dict["collocation_idx_x"],
+                        dims=["time"],
+                        coords={"time": results_dict["obs_time"]},
+                        attrs=variable_def["colidx_x"],
+                    ),
+                    "colidx_y": xr.DataArray(
+                        data=results_dict["collocation_idx_y"],
+                        dims=["time"],
+                        coords={"time": results_dict["obs_time"]},
+                        attrs=variable_def["colidx_y"],
+                    ),
+                },
+                attrs={"title": str(type(self))[8:-2] + " dataset"},
+            )
         except Exception as e:
-            logger.warning('Exception occurred in _build_xr_dataset')
+            logger.warning("Exception occurred in _build_xr_dataset")
             logger.warning(e)
             logger.warning(ds)
         return ds
 
     def _drop_duplicates(self, **kwargs):
 
-        dim = kwargs.get('dim_duplicates', 'time')
-        keep = kwargs.get('keep_duplicates', 'first')
-        print('Removing duplicates according to', dim)
-        print('Keeping', keep, 'value for the duplicates')
+        dim = kwargs.get("dim_duplicates", "time")
+        keep = kwargs.get("keep_duplicates", "first")
+        print("Removing duplicates according to", dim)
+        print("Keeping", keep, "value for the duplicates")
         new = deepcopy(self)
         new.vars = self.vars.drop_duplicates(dim=dim, keep=keep)
-        print(str(int(abs(len(self.vars[dim])-len(new.vars[dim])))),
-              'values removed')
-        print('New number of footprints is:', str(int(len(new.vars[dim]))))
+        print(str(int(abs(len(self.vars[dim]) - len(new.vars[dim])))), "values removed")
+        print("New number of footprints is:", str(int(len(new.vars[dim]))))
         return new
 
     def _collocate_field(self, mco, tmp_dict, **kwargs):
@@ -445,60 +443,64 @@ class collocation_class(qls):
         Some info
         """
         logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
+        log_level = str(kwargs.get("logging", "WARNING").upper())
         logger.setLevel(getattr(logging, log_level, logging.WARNING))
 
         Mlons = mco.vars.lons.data
         Mlats = mco.vars.lats.data
-        Mvars = {v:mco.vars[v].data for v in self.varalias_mod}
+        Mvars = {v: mco.vars[v].data for v in self.varalias_mod}
 
         if len(Mlons.shape) > 2:
             Mlons = Mlons[0, :].squeeze()
             Mlats = Mlats[0, :].squeeze()
-            Mvars = {v:Mvars[v][0, :].squeeze() for v in\
-                           Mvars.keys()}
+            Mvars = {v: Mvars[v][0, :].squeeze() for v in Mvars.keys()}
 
         elif len(Mlons.shape) == 2:
             Mlons = Mlons.squeeze()
             Mlats = Mlats.squeeze()
-            Mvars = {v:Mvars[v].squeeze() for v in Mvars.keys()}
+            Mvars = {v: Mvars[v].squeeze() for v in Mvars.keys()}
 
         elif len(Mlons.shape) == 1:
             Mlons, Mlats = np.meshgrid(Mlons, Mlats)
-            Mvars = {v:Mvars[v].squeeze() for v in Mvars.keys()}
+            Mvars = {v: Mvars[v].squeeze() for v in Mvars.keys()}
             assert len(Mlons.shape) == 2
-        obs_vars = {v:tmp_dict[v] for v in self.varalias_obs}
-        obs_lons = tmp_dict['lons']
-        obs_lats = tmp_dict['lats']
+        obs_vars = {v: tmp_dict[v] for v in self.varalias_obs}
+        obs_lons = tmp_dict["lons"]
+        obs_lats = tmp_dict["lats"]
         # Compare wave heights of satellite with model with
         # constraint on distance and time frame
-        logger.info("Perform collocation with distance limit\n" +
-                    "distlim: " + str(self.distlim))
-        index_array_2d, distance_array, _ =\
-                                    collocation_fct(
-                                    obs_lons, obs_lats,
-                                    Mlons, Mlats)
+        logger.info(
+            "Perform collocation with distance limit\n"
+            + "distlim: "
+            + str(self.distlim)
+        )
+        index_array_2d, distance_array, _ = collocation_fct(
+            obs_lons, obs_lats, Mlons, Mlats
+        )
         # caution: index_array_2d is tuple
         # impose distlim
-        dist_idx = np.where((distance_array < self.distlim*1000) &
-                            (~np.isnan(Mvars[self.varalias_mod[0]]\
-                            [index_array_2d[0],
-                             index_array_2d[1]])))[0]
+        dist_idx = np.where(
+            (distance_array < self.distlim * 1000)
+            & (
+                ~np.isnan(
+                    Mvars[self.varalias_mod[0]][index_array_2d[0], index_array_2d[1]]
+                )
+            )
+        )[0]
         idx_x = index_array_2d[0][dist_idx]
         idx_y = index_array_2d[1][dist_idx]
         results_dict = {
-                'dist': list(distance_array[dist_idx]),
-                'model_lons': list(Mlons[idx_x, idx_y]),
-                'model_lats': list(Mlats[idx_x, idx_y]),
-                'obs_lons': list(obs_lons[dist_idx]),
-                'obs_lats': list(obs_lats[dist_idx]),
-                'collocation_idx_x': list(idx_x),
-                'collocation_idx_y': list(idx_y),
-                'time': tmp_dict['time'][dist_idx],
-                **{'model_'+v: Mvars[v][idx_x, idx_y] for v in Mvars.keys()},
-                **{'obs_'+v: obs_vars[v][dist_idx] for v in\
-                self.varalias_obs}
-                }
+            "dist": list(distance_array[dist_idx]),
+            "model_lons": list(Mlons[idx_x, idx_y]),
+            "model_lats": list(Mlats[idx_x, idx_y]),
+            "obs_lons": list(obs_lons[dist_idx]),
+            "obs_lats": list(obs_lats[dist_idx]),
+            "collocation_idx_x": list(idx_x),
+            "collocation_idx_y": list(idx_y),
+            "time": tmp_dict["time"][dist_idx],
+            **{"model_" + v: Mvars[v][idx_x, idx_y] for v in Mvars.keys()},
+            **{"obs_" + v: obs_vars[v][dist_idx] for v in self.varalias_obs},
+        }
         return results_dict
 
     def _collocate_track(self, **kwargs):
@@ -506,45 +508,50 @@ class collocation_class(qls):
         Some info
         """
         logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
+        log_level = str(kwargs.get("logging", "WARNING").upper())
         logger.setLevel(getattr(logging, log_level, logging.WARNING))
 
         logger.info("run: _collocate_track")
 
         # use only dates with a model time step closeby
         # given the time constrains
-        logger.info('Filtering valid dates ...')
+        logger.info("Filtering valid dates ...")
         t1 = time.time()
 
         ndt = self.oco.vars.time.data
         ndt_datetime = [parse_date(str(d)) for d in ndt]
 
         ndt_valid = find_valid_fc_dates_for_model_and_leadtime(
-                                    ndt, self.model, self.leadtime,
-                                    self.colloc_time_method,name=self.name, **kwargs)
+            ndt,
+            self.model,
+            self.leadtime,
+            self.colloc_time_method,
+            name=self.name,
+            **kwargs,
+        )
 
         ndt_valid = np.unique(ndt_valid)
 
         fc_date = ndt_valid
         t2 = time.time()
 
-        logger.info(f'... done, used {t2-t1:.2f} seconds')
+        logger.info(f"... done, used {t2-t1:.2f} seconds")
 
         logger.info("Start collocation ...")
 
         results_dict = {
-                'model_time': [],
-                'obs_time': [],
-                'dist': [],
-                'model_lons': [],
-                'model_lats': [],
-                'obs_lons': [],
-                'obs_lats': [],
-                'collocation_idx_x': [],
-                'collocation_idx_y': [],
-                **{'model_'+v:[] for v in self.varalias_mod},
-                **{'obs_'+v:[] for v in self.varalias_obs}
-                }
+            "model_time": [],
+            "obs_time": [],
+            "dist": [],
+            "model_lons": [],
+            "model_lats": [],
+            "obs_lons": [],
+            "obs_lats": [],
+            "collocation_idx_x": [],
+            "collocation_idx_y": [],
+            **{"model_" + v: [] for v in self.varalias_mod},
+            **{"obs_" + v: [] for v in self.varalias_obs},
+        }
 
         for i in tqdm(range(len(fc_date))):
             logger.info(fc_date[i])
@@ -555,81 +562,89 @@ class collocation_class(qls):
 
                     # if method is 'nearest', get the values that fall within
                     # a time window of +/- 30 minutes of model time by default
-                    if self.colloc_time_method=='nearest':
-                        idx = collocate_times(ndt_datetime,
-                                              target_t=target_date,
-                                              twin=self.twin)
+                    if self.colloc_time_method == "nearest":
+                        idx = collocate_times(
+                            ndt_datetime, target_t=target_date, twin=self.twin
+                        )
                     # if method is 'floor' get the values that fall between
                     # model time and model time + 1 hour
-                    elif self.colloc_time_method=='floor':
+                    elif self.colloc_time_method == "floor":
                         sdate_colloc = target_date[0]
                         edate_colloc = target_date[0] + timedelta(hours=1)
-                        idx = collocate_times(ndt_datetime,
-                                              target_t=target_date,
-                                              sdate=sdate_colloc,
-                                              edate=edate_colloc,
-                                              twin=0)
+                        idx = collocate_times(
+                            ndt_datetime,
+                            target_t=target_date,
+                            sdate=sdate_colloc,
+                            edate=edate_colloc,
+                            twin=0,
+                        )
                     # if method is 'ceil' get the values that fall between
                     # model time - 1 hour and model time
-                    elif self.colloc_time_method=='ceil':
+                    elif self.colloc_time_method == "ceil":
                         sdate_colloc = target_date[0] - timedelta(hours=1)
-                        edate_colloc = target_date[0] 
-                        idx = collocate_times(ndt_datetime,
-                                              target_t=target_date,
-                                              sdate=sdate_colloc,
-                                              edate=edate_colloc,
-                                              twin=0)                                
+                        edate_colloc = target_date[0]
+                        idx = collocate_times(
+                            ndt_datetime,
+                            target_t=target_date,
+                            sdate=sdate_colloc,
+                            edate=edate_colloc,
+                            twin=0,
+                        )
 
                     logger.info(len(idx), "footprints to be collocated")
                     # make tmp obs_obj with filtered data
                     tmp_dict = {}
-                    tmp_dict['time'] = self.oco.vars['time'].values[idx]
-                    tmp_dict['lats'] = self.oco.vars['lats'].values[idx]
-                    tmp_dict['lons'] = self.oco.vars['lons'].values[idx]
+                    tmp_dict["time"] = self.oco.vars["time"].values[idx]
+                    tmp_dict["lats"] = self.oco.vars["lats"].values[idx]
+                    tmp_dict["lons"] = self.oco.vars["lons"].values[idx]
 
                     for v in self.varalias_obs:
                         tmp_dict[v] = self.oco.vars[v].values[idx]
                     logger.info("#########################")
                     logger.info(self.varalias_mod)
-                    mco = mc(sd=fc_date[i], ed=fc_date[i], 
-                             nID=self.model,
-                             name=self.model_name,
-                             leadtime=self.leadtime, 
-                             varalias=self.varalias_mod,
-                             **kwargs)
+                    mco = mc(
+                        sd=fc_date[i],
+                        ed=fc_date[i],
+                        nID=self.model,
+                        name=self.name,
+                        leadtime=self.leadtime,
+                        varalias=self.varalias_mod,
+                        **kwargs,
+                    )
                     mco = mco.populate(**kwargs)
-                    results_dict_tmp = self._collocate_field(
-                                            mco, tmp_dict, **kwargs)
-                    if (len(results_dict_tmp["model_" +\
-                                            self.varalias_mod[0]]) > 0):
+                    results_dict_tmp = self._collocate_field(mco, tmp_dict, **kwargs)
+                    if len(results_dict_tmp["model_" + self.varalias_mod[0]]) > 0:
                         # append to dict
-                        results_dict['model_time'].append(\
-                                [fc_date[i]]*len(results_dict_tmp['time']))
-                        results_dict['obs_time'].append(
-                                results_dict_tmp['time'])
-                        results_dict['dist'].append(
-                                results_dict_tmp['dist'])
-                        results_dict['model_lons'].append(
-                                results_dict_tmp['model_lons'])
-                        results_dict['model_lats'].append(
-                                results_dict_tmp['model_lats'])
-                        results_dict['obs_lats'].append(
-                                results_dict_tmp['obs_lats'])
-                        results_dict['obs_lons'].append(
-                                results_dict_tmp['obs_lons'])
-                        results_dict['collocation_idx_x'].append(
-                                        results_dict_tmp['collocation_idx_x'])
-                        results_dict['collocation_idx_y'].append(
-                                        results_dict_tmp['collocation_idx_y'])
-                        for v in self.varalias_mod: 
-                            results_dict['model_'+v].append(
-                                        results_dict_tmp['model_'+v])
-                        for v in self.varalias_obs: 
-                            results_dict['obs_'+v].append(
-                                        results_dict_tmp['obs_'+v])
+                        results_dict["model_time"].append(
+                            [fc_date[i]] * len(results_dict_tmp["time"])
+                        )
+                        results_dict["obs_time"].append(results_dict_tmp["time"])
+                        results_dict["dist"].append(results_dict_tmp["dist"])
+                        results_dict["model_lons"].append(
+                            results_dict_tmp["model_lons"]
+                        )
+                        results_dict["model_lats"].append(
+                            results_dict_tmp["model_lats"]
+                        )
+                        results_dict["obs_lats"].append(results_dict_tmp["obs_lats"])
+                        results_dict["obs_lons"].append(results_dict_tmp["obs_lons"])
+                        results_dict["collocation_idx_x"].append(
+                            results_dict_tmp["collocation_idx_x"]
+                        )
+                        results_dict["collocation_idx_y"].append(
+                            results_dict_tmp["collocation_idx_y"]
+                        )
+                        for v in self.varalias_mod:
+                            results_dict["model_" + v].append(
+                                results_dict_tmp["model_" + v]
+                            )
+                        for v in self.varalias_obs:
+                            results_dict["obs_" + v].append(
+                                results_dict_tmp["obs_" + v]
+                            )
                     else:
                         pass
-                    if 'results_dict_tmp' in locals():
+                    if "results_dict_tmp" in locals():
                         del results_dict_tmp
             except (ValueError, FileNotFoundError, OSError) as e:
                 # ValueError, pass if no collocation
@@ -638,126 +653,136 @@ class collocation_class(qls):
                 logger.exception(e)
                 logger.error(e)
         # flatten all aggregated entries
-        results_dict['model_time'] = flatten(results_dict['model_time'])
-        results_dict['obs_time'] = flatten(results_dict['obs_time'])
-        results_dict['dist'] = flatten(results_dict['dist'])
-        results_dict['model_lons'] = flatten(results_dict['model_lons'])
-        results_dict['model_lats'] = flatten(results_dict['model_lats'])
-        results_dict['obs_lats'] = flatten(results_dict['obs_lats'])
-        results_dict['obs_lons'] = flatten(results_dict['obs_lons'])
-        results_dict['collocation_idx_x'] = flatten(
-                                    results_dict['collocation_idx_x'])
-        results_dict['collocation_idx_y'] = flatten(
-                                results_dict['collocation_idx_y'])
+        results_dict["model_time"] = flatten(results_dict["model_time"])
+        results_dict["obs_time"] = flatten(results_dict["obs_time"])
+        results_dict["dist"] = flatten(results_dict["dist"])
+        results_dict["model_lons"] = flatten(results_dict["model_lons"])
+        results_dict["model_lats"] = flatten(results_dict["model_lats"])
+        results_dict["obs_lats"] = flatten(results_dict["obs_lats"])
+        results_dict["obs_lons"] = flatten(results_dict["obs_lons"])
+        results_dict["collocation_idx_x"] = flatten(results_dict["collocation_idx_x"])
+        results_dict["collocation_idx_y"] = flatten(results_dict["collocation_idx_y"])
         for v in self.varalias_mod:
-            results_dict['model_'+v] = flatten(results_dict['model_'+v])
+            results_dict["model_" + v] = flatten(results_dict["model_" + v])
         for v in self.varalias_obs:
-            results_dict['obs_'+v] = flatten(results_dict['obs_'+v])
+            results_dict["obs_" + v] = flatten(results_dict["obs_" + v])
 
         return results_dict
 
     def _collocate_centered_model_value(self, time, lon, lat, **kwargs):
 
-        #(time, lon, lat, nID_model, name_model, res):
+        # (time, lon, lat, nID_model, name_model, res):
 
         nID_model = self.model
         name_model = self.model
         res = self.res
         colloc_time_method = self.colloc_time_method
 
-        print('Using resolution {}'.format(res))
+        print("Using resolution {}".format(res))
         # ADD CHECK LIMITS FOR LAT AND LON
         res_dict = {}
 
         time_dt = pd.to_datetime(time)
         model_time = hour_rounder(time_dt, method=colloc_time_method)
 
-        mco = mc(sd=model_time, ed=model_time,
-                 nID=nID_model,
-                 name=name_model,
-                 varalias=self.varalias_mod,
-                 max_lt=12).populate(twin=5)  # ADD AS PARAMETERS
+        mco = mc(
+            sd=model_time,
+            ed=model_time,
+            nID=nID_model,
+            name=name_model,
+            varalias=self.varalias_mod,
+            max_lt=12,
+        ).populate(
+            twin=5
+        )  # ADD AS PARAMETERS
 
-        bb = (lon - res[0]/2,
-              lon + res[0]/2,
-              lat - res[1]/2,
-              lat + res[1]/2)
+        bb = (lon - res[0] / 2, lon + res[0] / 2, lat - res[1] / 2, lat + res[1] / 2)
 
         for i, v in enumerate(mco.varalias):
-            gco = gc(lons=mco.vars.lons.squeeze().values.ravel(),
-                     lats=mco.vars.lats.squeeze().values.ravel(),
-                     values=mco.vars[v].squeeze().values.ravel(),
-                     bb=bb, res=res,
-                     varalias=v,
-                     units=mco.units[i],
-                     sdate=mco.vars.time,
-                     edate=mco.vars.time)
-    
+            gco = gc(
+                lons=mco.vars.lons.squeeze().values.ravel(),
+                lats=mco.vars.lats.squeeze().values.ravel(),
+                values=mco.vars[v].squeeze().values.ravel(),
+                bb=bb,
+                res=res,
+                varalias=v,
+                units=mco.units[i],
+                sdate=mco.vars.time,
+                edate=mco.vars.time,
+            )
+
             gridvar, lon_grid, lat_grid = apply_metric(gco=gco)
-    
-            ts = gridvar['mor'].flatten()
-            
-            res_dict['model_'+v] = ts[0]
-        
+
+            ts = gridvar["mor"].flatten()
+
+            res_dict["model_" + v] = ts[0]
+
         lon_flat = lon_grid.flatten()
         lat_flat = lat_grid.flatten()
 
-        res_dict['lon'] = lon_flat[0]
-        res_dict['lat'] = lat_flat[0]
-        res_dict['obs_time'] = time
-        res_dict['model_time'] = model_time
+        res_dict["lon"] = lon_flat[0]
+        res_dict["lat"] = lat_flat[0]
+        res_dict["obs_time"] = time
+        res_dict["model_time"] = model_time
 
         return res_dict
 
     def _collocate_regridded_model(self, **kwargs):
 
         from joblib import Parallel, delayed
-    
-        lon_mod_list=[]
-        lat_mod_list=[]
-        time_mod_list=[]
-        
+
+        lon_mod_list = []
+        lat_mod_list = []
+        time_mod_list = []
+
         nproc = self.nproc
-        
+
         oco_vars = self.oco.vars
 
         length = len(oco_vars.time.values)
 
-        #Parallel should be optional, with nproc as parameter
+        # Parallel should be optional, with nproc as parameter
         colloc_mod_list = Parallel(n_jobs=nproc)(
-                               delayed(self._collocate_centered_model_value) (
-                                           oco_vars.time.values[i],
-                                           oco_vars.lons.values[i],
-                                           oco_vars.lats.values[i],
-                                           **kwargs) for i in range(length)
-                                           )
+            delayed(self._collocate_centered_model_value)(
+                oco_vars.time.values[i],
+                oco_vars.lons.values[i],
+                oco_vars.lats.values[i],
+                **kwargs,
+            )
+            for i in range(length)
+        )
 
         length_colloc_mod_list = len(colloc_mod_list)
-        var_mod_list = {v:[colloc_mod_list[i]['model_'+v] for i in \
-                       range(length_colloc_mod_list)] for v in\
-                        self.varalias_mod}
-        lon_mod_list = [colloc_mod_list[i]['lon'] for i in \
-                       range(length_colloc_mod_list)]
-        lat_mod_list = [colloc_mod_list[i]['lat'] for i in \
-                       range(length_colloc_mod_list)]
-        time_mod_list = [colloc_mod_list[i]['model_time'] for i in \
-                       range(length_colloc_mod_list)]
-        time_obs_list = [colloc_mod_list[i]['obs_time'] for i in \
-                       range(length_colloc_mod_list)]
+        var_mod_list = {
+            v: [colloc_mod_list[i]["model_" + v] for i in range(length_colloc_mod_list)]
+            for v in self.varalias_mod
+        }
+        lon_mod_list = [
+            colloc_mod_list[i]["lon"] for i in range(length_colloc_mod_list)
+        ]
+        lat_mod_list = [
+            colloc_mod_list[i]["lat"] for i in range(length_colloc_mod_list)
+        ]
+        time_mod_list = [
+            colloc_mod_list[i]["model_time"] for i in range(length_colloc_mod_list)
+        ]
+        time_obs_list = [
+            colloc_mod_list[i]["obs_time"] for i in range(length_colloc_mod_list)
+        ]
 
         results_dict = {
-            'model_time': time_mod_list,
-            'obs_time': time_obs_list,
-            'dist': [0]*length,
-            **{'model_' + v: var_mod_list[v] for v in self.varalias_mod},
-            'model_lons': lon_mod_list,
-            'model_lats': lat_mod_list,
-            **{'obs_'+v: oco_vars[v].values for v in self.varalias_obs},
-            'obs_lons': oco_vars.lons.values,
-            'obs_lats': oco_vars.lats.values,
-            'collocation_idx_x': [0]*length,
-            'collocation_idx_y': [0]*length,
-            }
+            "model_time": time_mod_list,
+            "obs_time": time_obs_list,
+            "dist": [0] * length,
+            **{"model_" + v: var_mod_list[v] for v in self.varalias_mod},
+            "model_lons": lon_mod_list,
+            "model_lats": lat_mod_list,
+            **{"obs_" + v: oco_vars[v].values for v in self.varalias_obs},
+            "obs_lons": oco_vars.lons.values,
+            "obs_lats": oco_vars.lats.values,
+            "collocation_idx_x": [0] * length,
+            "collocation_idx_y": [0] * length,
+        }
 
         return results_dict
 
@@ -766,81 +791,81 @@ class collocation_class(qls):
         get obs value for model value for given
             temporal and spatial constraints
         """
-        if (self.oco is None and len(self.oco.vars[self.oco.stdvarname]) < 1):
-            raise Exception('\n###\n'
-                    + 'Collocation not possible, '
-                    + 'no observation values for collocation!'
-                    + '\n###')
-        if (self.model is None):
-            raise Exception ('\n###\n'
-                            +'Collocation not possible, '
-                            +'no model available for collocation!'
-                            +'\n###'
-                            )
-        if ((self.model is not None) and (self.oco is not None)):
-            if self.method == 'closest':
+        if self.oco is None and len(self.oco.vars[self.oco.stdvarname]) < 1:
+            raise Exception(
+                "\n###\n"
+                + "Collocation not possible, "
+                + "no observation values for collocation!"
+                + "\n###"
+            )
+        if self.model is None:
+            raise Exception(
+                "\n###\n"
+                + "Collocation not possible, "
+                + "no model available for collocation!"
+                + "\n###"
+            )
+        if (self.model is not None) and (self.oco is not None):
+            if self.method == "closest":
                 results_dict = self._collocate_track(**kwargs)
-            elif self.method == 'regridded':
+            elif self.method == "regridded":
                 results_dict = self._collocate_regridded_model(**kwargs)
 
         return results_dict
 
-
     def validate_collocated_values(self, **kwargs):
-        varalias = kwargs.get('varalias', self.varalias[0])
-        times = self.vars['time']
+        varalias = kwargs.get("varalias", self.varalias[0])
+        times = self.vars["time"]
         dtime = [parse_date(str(t.data)) for t in times]
         list_vars = list(self.vars.variables)
-        assert 'model_'+varalias in list_vars, "model_{}".format(varalias) +\
-                                      " is missing in "+\
-                                      "the dataset, if you would like to "+\
-                                      "validate another variable, please "+\
-                                      "specify with varalias."
-        assert 'obs_'+varalias in list_vars, "obs_{}".format(varalias) +\
-                                      " is missing in "+\
-                                      "the dataset, if you would like to "+\
-                                      "validate another variable, please "+\
-                                      "specify with varalias."
-        print("Validating model_{} against obs_{}".format(varalias, varalias))                                     
-        mods = self.vars['model_'+varalias]
-        obs = self.vars['obs_'+varalias]
+        assert "model_" + varalias in list_vars, (
+            "model_{}".format(varalias)
+            + " is missing in "
+            + "the dataset, if you would like to "
+            + "validate another variable, please "
+            + "specify with varalias."
+        )
+        assert "obs_" + varalias in list_vars, (
+            "obs_{}".format(varalias)
+            + " is missing in "
+            + "the dataset, if you would like to "
+            + "validate another variable, please "
+            + "specify with varalias."
+        )
+        print("Validating model_{} against obs_{}".format(varalias, varalias))
+        mods = self.vars["model_" + varalias]
+        obs = self.vars["obs_" + varalias]
         sdate = dtime[0]
         edate = dtime[-1]
         validation_dict = validate_collocated_values(
-                                dtime, obs, mods,
-                                sdate=sdate, edate=edate,
-                                **kwargs)
+            dtime, obs, mods, sdate=sdate, edate=edate, **kwargs
+        )
         return validation_dict
 
 
 def validate_collocated_values(dtime, obs, mods, **kwargs):
     target_t, sdate, edate, twin = None, None, None, None
-    if ('col_obj' in kwargs.keys() and kwargs['col_obj'] is not None):
-        col_obj = kwargs['col_obj']
-        mods = col_obj.vars['model_values']
-        obs = col_obj.vars['obs_values']
-        dtime = col_obj.vars['time']
+    if "col_obj" in kwargs.keys() and kwargs["col_obj"] is not None:
+        col_obj = kwargs["col_obj"]
+        mods = col_obj.vars["model_values"]
+        obs = col_obj.vars["obs_values"]
+        dtime = col_obj.vars["time"]
     # get idx for date and twin
-    if 'target_t' in kwargs.keys():
-        target_t = kwargs['target_t']
-    if 'sdate' in kwargs.keys():
-        sdate = kwargs['sdate']
-    if 'edate' in kwargs.keys():
-        edate = kwargs['edate']
-    if 'twin' in kwargs.keys():
-        twin = kwargs['twin']
-    idx = collocate_times(dtime,
-                          target_t=target_t,
-                          sdate=sdate,
-                          edate=edate,
-                          twin=twin)
+    if "target_t" in kwargs.keys():
+        target_t = kwargs["target_t"]
+    if "sdate" in kwargs.keys():
+        sdate = kwargs["sdate"]
+    if "edate" in kwargs.keys():
+        edate = kwargs["edate"]
+    if "twin" in kwargs.keys():
+        twin = kwargs["twin"]
+    idx = collocate_times(dtime, target_t=target_t, sdate=sdate, edate=edate, twin=twin)
     mods = np.array(mods)[idx]
     obs = np.array(obs)[idx]
-    results_dict = {'model_values': mods, 'obs_values': obs}
+    results_dict = {"model_values": mods, "obs_values": obs}
 
     # validate
     validation_dict = validate(results_dict)
     disp_validation(validation_dict)
 
     return validation_dict
-
