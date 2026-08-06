@@ -10,7 +10,8 @@ from abc import abstractmethod
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-import matplotlib.cm as mplcm
+import matplotlib as mpl
+import cmocean
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import logging
 
@@ -62,6 +63,8 @@ class quicklook_class_sat:
             plot_var = self.vars[varalias]
             plot_lons = self.vars.lons
             plot_lats = self.vars.lats
+            plot_var_obs = None
+            plot_var_model = None
         except Exception as e:
             list_vars = list(self.vars.variables)
             assert "model_" + varalias in list_vars, (
@@ -123,7 +126,18 @@ class quicklook_class_sat:
                 transform=ccrs.PlateCarree(),
             )
 
-    def plot_map(self, projection, plot_lons, plot_lats, **kwargs):
+    def plot_map(
+        self,
+        projection,
+        plot_lons,
+        plot_lats,
+        plot_var,
+        varalias,
+        units_to_plot,
+        cmap,
+        fs,
+        **kwargs,
+    ):
         """
         Plot a map with the given projection and keyword arguments.
 
@@ -514,7 +528,7 @@ class quicklook_class_sat:
         return fig, ax
 
     def plot_hist(
-        self, plot_var_obs, plot_var_model, varalias, units_to_plot, **kwargs
+        self, plot_var_obs, plot_var_model, varalias, units_to_plot, fs, **kwargs
     ):
         lq = np.arange(0.01, 1.01, 0.01)
         lq = kwargs.get("lq", lq)
@@ -625,7 +639,17 @@ class quicklook_class_sat:
         )
 
         if m is True:
-            fig, ax = self.plot_map(projection, plot_lons, plot_lats, **kwargs)
+            fig, ax = self.plot_map(
+                projection,
+                plot_lons,
+                plot_lats,
+                plot_var,
+                varalias,
+                units_to_plot,
+                cmap,
+                fs,
+                **kwargs,
+            )
 
         if ts is True:
             fig, ax = self.plot_timeseries(
@@ -639,7 +663,7 @@ class quicklook_class_sat:
 
         if hst is True:
             fig, ax = self.plot_hist(
-                plot_var_obs, plot_var_model, varalias, units_to_plot, **kwargs
+                plot_var_obs, plot_var_model, varalias, units_to_plot, fs, **kwargs
             )
         if kwargs.get("show") is False:
             return fig, ax
