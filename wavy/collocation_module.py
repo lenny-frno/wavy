@@ -18,6 +18,7 @@ from tqdm import tqdm
 from copy import deepcopy
 import xarray as xr
 import pandas as pd
+import copy
 
 # import traceback
 import logging
@@ -309,11 +310,17 @@ class collocation_class(qls):
         self.res = kwargs.get("res", (0.5, 0.5))
         logger.info(
             "collocation_class initialized (nID=%s, model=%s, name=%s)",
-            self.nID, self.model, self.name,
+            self.nID,
+            self.model,
+            self.name,
         )
         logger.debug(
             "varalias=%s, leadtime=%s, twin=%s, distlim=%s, method=%s",
-            self.varalias, self.leadtime, self.twin, self.distlim, self.method,
+            self.varalias,
+            self.leadtime,
+            self.twin,
+            self.distlim,
+            self.method,
         )
 
     def populate(self, **kwargs):
@@ -343,7 +350,8 @@ class collocation_class(qls):
             t1 = time.time()
             logger.info(
                 "%d values collocated in %.2f seconds",
-                len(new.vars["time"]), t1 - t0,
+                len(new.vars["time"]),
+                t1 - t0,
             )
 
         except Exception as e:
@@ -451,7 +459,8 @@ class collocation_class(qls):
         n_removed = int(abs(len(self.vars[dim]) - len(new.vars[dim])))
         logger.info(
             "%d duplicates removed, %d footprints remaining",
-            n_removed, len(new.vars[dim]),
+            n_removed,
+            len(new.vars[dim]),
         )
         return new
 
@@ -542,7 +551,11 @@ class collocation_class(qls):
         fc_date = ndt_valid
         t2 = time.time()
 
-        logger.info("... done in %.2f seconds, %d valid timestep(s) found", t2 - t1, len(fc_date))
+        logger.info(
+            "... done in %.2f seconds, %d valid timestep(s) found",
+            t2 - t1,
+            len(fc_date),
+        )
 
         logger.info("Start collocation ...")
 
@@ -563,40 +576,40 @@ class collocation_class(qls):
         for i in tqdm(range(len(fc_date))):
             logger.debug("Processing fc_date: %s", fc_date[i])
             try:
-                for j in range(1):
-                    # filter needed obs within time period
-                    target_date = [parse_date(str(fc_date[i]))]
 
-                    # if method is 'nearest', get the values that fall within
-                    # a time window of +/- 30 minutes of model time by default
-                    if self.colloc_time_method == "nearest":
-                        idx = collocate_times(
-                            ndt_datetime, target_t=target_date, twin=self.twin
-                        )
-                    # if method is 'floor' get the values that fall between
-                    # model time and model time + 1 hour
-                    elif self.colloc_time_method == "floor":
-                        sdate_colloc = target_date[0]
-                        edate_colloc = target_date[0] + timedelta(hours=1)
-                        idx = collocate_times(
-                            ndt_datetime,
-                            target_t=target_date,
-                            sdate=sdate_colloc,
-                            edate=edate_colloc,
-                            twin=0,
-                        )
-                    # if method is 'ceil' get the values that fall between
-                    # model time - 1 hour and model time
-                    elif self.colloc_time_method == "ceil":
-                        sdate_colloc = target_date[0] - timedelta(hours=1)
-                        edate_colloc = target_date[0]
-                        idx = collocate_times(
-                            ndt_datetime,
-                            target_t=target_date,
-                            sdate=sdate_colloc,
-                            edate=edate_colloc,
-                            twin=0,
-                        )
+                # filter needed obs within time period
+                target_date = [parse_date(str(fc_date[i]))]
+
+                # if method is 'nearest', get the values that fall within
+                # a time window of +/- 30 minutes of model time by default
+                if self.colloc_time_method == "nearest":
+                    idx = collocate_times(
+                        ndt_datetime, target_t=target_date, twin=self.twin
+                    )
+                # if method is 'floor' get the values that fall between
+                # model time and model time + 1 hour
+                elif self.colloc_time_method == "floor":
+                    sdate_colloc = target_date[0]
+                    edate_colloc = target_date[0] + timedelta(hours=1)
+                    idx = collocate_times(
+                        ndt_datetime,
+                        target_t=target_date,
+                        sdate=sdate_colloc,
+                        edate=edate_colloc,
+                        twin=0,
+                    )
+                # if method is 'ceil' get the values that fall between
+                # model time - 1 hour and model time
+                elif self.colloc_time_method == "ceil":
+                    sdate_colloc = target_date[0] - timedelta(hours=1)
+                    edate_colloc = target_date[0]
+                    idx = collocate_times(
+                        ndt_datetime,
+                        target_t=target_date,
+                        sdate=sdate_colloc,
+                        edate=edate_colloc,
+                        twin=0,
+                    )
 
                     logger.debug("%d footprints to be collocated", len(idx))
                     # make tmp obs_obj with filtered data
