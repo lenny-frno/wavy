@@ -14,7 +14,6 @@ def test_ww3_4km_reader():
     assert mco.__class__.__name__ == "model_class"
     mco.populate()
     # print(mco.vars)
-    print(vars(mco).keys())
     assert len(vars(mco).keys()) == 19
     assert len(mco.vars.keys()) == 3
 
