@@ -23,6 +23,7 @@ import pandas as pd
 import logging
 
 # own imports
+from wavy.logmod import get_logger
 from wavy.utils import collocate_times
 from wavy.utils import hour_rounder_pd, hour_rounder
 from wavy.utils import parse_date
@@ -195,12 +196,7 @@ def find_valid_fc_dates_for_model_and_leadtime(
 
 # Module-level logger — INFO by default so progress messages are visible without extra setup.
 # Adjust verbosity with configure_logging() or the standard library directly.
-logger = logging.getLogger(__name__)
-if not logger.handlers:
-    _handler = logging.StreamHandler()
-    _handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
-    logger.addHandler(_handler)
-    logger.setLevel(logging.INFO)
+logger = get_logger(__name__)
 
 
 def configure_logging(level="DEBUG"):
