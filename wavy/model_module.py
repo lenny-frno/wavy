@@ -22,6 +22,7 @@ from copy import deepcopy
 import logging
 
 # own imports
+from wavy.logmod import get_logger
 from wavy.utils import hour_rounder, make_fc_dates
 from wavy.utils import finditem, parse_date
 from wavy.utils import convert_meteorologic_oceanographic
@@ -71,10 +72,6 @@ def generate_bestguess_leadtime(model, fc_date, lidx=None, **kwargs):
     """
     fct to return leadtimes for bestguess
     """
-    logger = logging.getLogger(__name__)
-    log_level = str(kwargs.get('logging', 'WARNING').upper())
-    logger.setLevel(getattr(logging, log_level, logging.WARNING))
-
     if isinstance(fc_date, list):
         leadtime = \
             [generate_bestguess_leadtime(model, date, **kwargs)
@@ -129,6 +126,31 @@ def read_model_nc_output_lru(filestr, lonsname, latsname, timename):
 model_dict = load_or_default('model_cfg.yaml')
 variable_def = load_or_default('variable_def.yaml')
 
+# Module-level logger — INFO by default so progress messages are visible without extra setup.
+# Adjust verbosity with configure_logging() or the standard library directly.
+logger = get_logger(__name__)
+
+
+def configure_logging(level="DEBUG"):
+    """Configure logging verbosity for this module.
+
+    Args:
+        level (str): one of ``"DEBUG"``, ``"INFO"``, ``"WARNING"``, ``"ERROR"``.
+
+    Example::
+
+        from wavy.model_module import configure_logging
+        configure_logging("DEBUG")   # show all diagnostic messages
+        configure_logging("WARNING") # suppress info messages
+
+    Alternatively, use the standard library directly::
+
+        import logging
+        logging.getLogger("wavy.model_module").setLevel(logging.DEBUG)
+    """
+    logger.setLevel(getattr(logging, level.upper(), logging.DEBUG))
+    logger.info("Logging for '%s' set to %s", __name__, level.upper())
+
 
 class model_class(qls):
     '''
@@ -138,15 +160,8 @@ class model_class(qls):
     station classes.
     '''
     def __init__(self, **kwargs):
-        logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
-        logger.setLevel(getattr(logging, log_level, logging.WARNING))
-
-        logger.info('# ----- ')
-        logger.info(" ### Initializing model_class object ###")
-        logger.info(" ")
-        logger.info(" Given kwargs:")
-        logger.info(kwargs)
+        logger.info("Initializing model_class object")
+        logger.debug("Given kwargs: %s", kwargs)
 
         # initializing useful attributes from config file
         dc = init_class('model', kwargs.get('nID'))
@@ -175,19 +190,16 @@ class model_class(qls):
         else:
             self.name = _name
 
-        logger.info(" ")
-        logger.info(" ### model_class object initialized ### ")
-        logger.info('# ----- ')
+        logger.info(
+            "model_class initialized (nID=%s, model=%s, varalias=%s)",
+            self.nID, self.model, self.varalias,
+        )
 
 
     def crop_to_period(self, **kwargs):
         """
         Function to crop the variable dictionary to a given period
         """
-        logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
-        logger.setLevel(getattr(logging, log_level, logging.WARNING))
-
         new = deepcopy(self)
         sd = parse_date(kwargs.get('sd', str(new.sd)))
         ed = parse_date(kwargs.get('ed', str(new.ed)))
@@ -258,10 +270,6 @@ class model_class(qls):
         return:
             suitable datetime to create model filename
         '''
-        logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
-        logger.setLevel(getattr(logging, log_level, logging.WARNING))
-
         if ('init_times' in vars(self.cfg)['misc'].keys()
                 and vars(self.cfg)['misc']['init_times'] is not None):
             init_times = \
@@ -372,10 +380,6 @@ class model_class(qls):
         return:
             filename
         """
-        logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
-        logger.setLevel(getattr(logging, log_level, logging.WARNING))
-
         remoteHostName = kwargs.get('remoteHostName',
                                     self.cfg.misc.get('remoteHostName'))
 
@@ -465,10 +469,6 @@ class model_class(qls):
             pathlst - list of paths
             filelst - list of files
         """
-        logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
-        logger.setLevel(getattr(logging, log_level, logging.WARNING))
-
         filelst = []
         pathlst = []
         tmpdate = self.sd
@@ -541,14 +541,10 @@ class model_class(qls):
             del tmp
             pathtotals = np.unique(pathtotals[idx_start:idx_end+1])
             filelst = np.unique(filelst[idx_start:idx_end+1])
-        print(str(int(len(pathtotals))) + " valid files found")
+        logger.info("%d valid files found", len(pathtotals))
         return pathtotals, filelst
 
     def list_input_files(self, show=False, **kwargs):
-        logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
-        logger.setLevel(getattr(logging, log_level, logging.WARNING))
-
         if (kwargs.get('path') is None and kwargs.get('wavy_path') is None):
             fc_dates = make_fc_dates(self.sd, self.ed,
                                      self.cfg.misc['date_incr_unit'],
@@ -569,10 +565,7 @@ class model_class(qls):
                                           **kwargs)
 
         if show is True:
-            print(" ")
-            print("Found files:")
-            print(pathlst)
-            print(" ")
+            logger.info("Found files: %s", pathlst)
         return pathlst
 
     def _get_model(self, **kwargs):
@@ -592,10 +585,6 @@ class model_class(qls):
         return self
 
     def _enforce_longitude_format(self, **kwargs):
-        logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
-        logger.setLevel(getattr(logging, log_level, logging.WARNING))
-
         new = deepcopy(self)
         # adjust longitude -180/180
         attrs = new.vars.lons.attrs
@@ -613,10 +602,6 @@ class model_class(qls):
         return new
 
     def _enforce_meteorologic_convention(self, **kwargs):
-        logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
-        logger.setLevel(getattr(logging, log_level, logging.WARNING))
-
         logger.info(' enforcing meteorological convention')
         for v in self.varalias:
             if ('convention' in vars(self.cfg)['misc'].keys() and
@@ -633,10 +618,6 @@ class model_class(qls):
         return self
 
     def _change_varname_to_aliases(self, **kwargs):
-        logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
-        logger.setLevel(getattr(logging, log_level, logging.WARNING))
-
         logger.info(' changing variables to aliases')
         # variables
         for v in self.varalias:
@@ -665,10 +646,6 @@ class model_class(qls):
         return self
 
     def _change_stdvarname_to_cfname(self, **kwargs):
-        logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
-        logger.setLevel(getattr(logging, log_level, logging.WARNING))
-
         logger.info(' complying to cf standard names')
         # enforce standard_name for coordinate aliases
         self.vars['lons'].attrs['standard_name'] = \
@@ -684,11 +661,7 @@ class model_class(qls):
         return self
 
     def populate(self, **kwargs):
-        logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
-        logger.setLevel(getattr(logging, log_level, logging.WARNING))
-
-        logger.info(" ### Read files and populate model_class object")
+        logger.info("Populating model_class object")
 
         fc_dates = make_fc_dates(self.sd, self.ed,
                                  self.cfg.misc['date_incr_unit'],
@@ -768,15 +741,11 @@ class model_class(qls):
                     self.units = variable_def[newvaralias].get('units')
                 # create label for plotting
                 t1 = time.time()
-                logger.info(" ")
-                logger.info(' ## Summary:')
-                logger.info(str(len(self.vars['time']))
-                            + " time steps retrieved.")
-                logger.info("Time used for retrieving data:")
-                logger.info(round(t1-t0, 2), "seconds")
-                logger.info(" ")
-                logger.info(" ### model_class object populated ###")
-                logger.info('# ----- ')
+                logger.info(
+                    "%d time steps retrieved. Time used: %.2f seconds",
+                    len(self.vars['time']), t1 - t0,
+                )
+                logger.info("model_class object populated")
             except Exception as e:
                 logger.exception(e)
                 logger.error(e)
