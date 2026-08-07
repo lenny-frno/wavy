@@ -1,0 +1,531 @@
+"""
+Tests for the wavy.utils package and its sub-modules.
+
+Coverage:
+    wavy.utils.dates    — parse_date, hour_rounder, hour_rounder_pd,
+                          date_dispatcher, make_fc_dates,
+                          find_included_times, collocate_times
+    wavy.utils.geo      — haversineP, haversine_np, haversineA,
+                          footprint_pulse_limited_radius,
+                          convert_meteorologic_oceanographic
+    wavy.utils.stats    — runmean, marginalize, bootstr, compute_quantiles,
+                          calc_deep_water_T
+    wavy.utils.io       — make_pathtofile, make_subdict, NoStdStreams, get_size
+    wavy.utils.misc     — flatten, finditem, get_item_parent, get_item_child
+    wavy.utils          — backward-compat re-exports
+"""
+
+import io
+import sys
+import math
+from datetime import datetime, timedelta
+
+import numpy as np
+import pytest
+
+# ---------------------------------------------------------------------------
+# utils.dates
+# ---------------------------------------------------------------------------
+
+from wavy.utils.dates import (
+    parse_date,
+    hour_rounder,
+    hour_rounder_pd,
+    date_dispatcher,
+    date_next_hour,
+    date_next_day,
+    date_next_month,
+    date_next_year,
+    make_fc_dates,
+    find_included_times,
+    find_included_times_pd,
+    collocate_times,
+)
+
+
+class TestParseDate:
+    def test_passthrough_datetime(self):
+        dt = datetime(2023, 6, 15, 12)
+        assert parse_date(dt) is dt
+
+    def test_parse_iso_string(self):
+        assert parse_date("2023-06-15 12:00") == datetime(2023, 6, 15, 12, 0)
+
+    def test_parse_compact_string(self):
+        assert parse_date("20230615") == datetime(2023, 6, 15)
+
+    def test_non_parseable_returns_as_is(self):
+        # Non-string, non-datetime: should be returned unchanged
+        assert parse_date(42) == 42
+
+
+class TestHourRounder:
+    def test_nearest_rounds_up(self):
+        t = datetime(2023, 1, 1, 14, 35)
+        assert hour_rounder(t) == datetime(2023, 1, 1, 15, 0)
+
+    def test_nearest_rounds_down(self):
+        t = datetime(2023, 1, 1, 14, 20)
+        assert hour_rounder(t) == datetime(2023, 1, 1, 14, 0)
+
+    def test_floor(self):
+        t = datetime(2023, 1, 1, 14, 59)
+        assert hour_rounder(t, method="floor") == datetime(2023, 1, 1, 14, 0)
+
+    def test_ceil(self):
+        t = datetime(2023, 1, 1, 14, 1)
+        assert hour_rounder(t, method="ceil") == datetime(2023, 1, 1, 15, 0)
+
+    def test_strips_seconds_and_microseconds(self):
+        t = datetime(2023, 1, 1, 14, 10, 45, 999)
+        result = hour_rounder(t)
+        assert result.second == 0
+        assert result.microsecond == 0
+
+
+class TestHourRounderPd:
+    def test_rounds_list_of_times(self):
+        import pandas as pd
+
+        times = [datetime(2023, 1, 1, 14, 35), datetime(2023, 1, 1, 9, 10)]
+        result = hour_rounder_pd(times)
+        assert pd.Timestamp(result[0]) == pd.Timestamp("2023-01-01 15:00")
+        assert pd.Timestamp(result[1]) == pd.Timestamp("2023-01-01 09:00")
+
+
+class TestDateDispatcher:
+    base = datetime(2023, 6, 15, 0, 0)
+
+    def test_hour(self):
+        assert date_dispatcher(self.base, "h", 3) == datetime(2023, 6, 15, 3)
+
+    def test_day(self):
+        assert date_dispatcher(self.base, "d", 2) == datetime(2023, 6, 17)
+
+    def test_month(self):
+        result = date_dispatcher(self.base, "m", 1)
+        assert result == datetime(2023, 7, 1)
+
+    def test_year(self):
+        result = date_dispatcher(self.base, "y", 1)
+        assert result == datetime(2024, 6, 1)
+
+    def test_month_wraps_year(self):
+        result = date_dispatcher(datetime(2023, 12, 1), "m", 1)
+        assert result == datetime(2024, 1, 1)
+
+
+class TestMakeFcDates:
+    def test_daily_vector(self):
+        sd = datetime(2023, 1, 1)
+        ed = datetime(2023, 1, 3)
+        dates = make_fc_dates(sd, ed, "d", 1)
+        assert dates == [
+            datetime(2023, 1, 1),
+            datetime(2023, 1, 2),
+            datetime(2023, 1, 3),
+        ]
+
+    def test_single_date(self):
+        sd = datetime(2023, 6, 15)
+        dates = make_fc_dates(sd, sd, "d", 1)
+        assert dates == [datetime(2023, 6, 15)]
+
+    def test_string_inputs(self):
+        dates = make_fc_dates("2023-01-01", "2023-01-02", "d", 1)
+        assert len(dates) == 2
+
+    def test_hourly_vector(self):
+        sd = datetime(2023, 1, 1, 0)
+        ed = datetime(2023, 1, 1, 3)
+        dates = make_fc_dates(sd, ed, "h", 1)
+        assert len(dates) == 4
+
+
+class TestFindIncludedTimes:
+    times = [datetime(2023, 1, 1, h) for h in range(6)]
+
+    def test_exact_target_no_twin(self):
+        # twin=0 → window is [t, t) which is empty; use twin>0 for inclusion
+        idx = find_included_times(self.times, target_t=datetime(2023, 1, 1, 2), twin=1)
+        assert 2 in idx
+
+    def test_twin_window(self):
+        target = datetime(2023, 1, 1, 2, 30)
+        idx = find_included_times(self.times, target_t=target, twin=60)
+        assert 2 in idx and 3 in idx
+
+    def test_sdate_edate(self):
+        # upper bound is exclusive (strict <), so ed=03:00 excludes index 3
+        sd = datetime(2023, 1, 1, 1)
+        ed = datetime(2023, 1, 1, 3)
+        idx = find_included_times(self.times, sdate=sd, edate=ed)
+        assert idx == [1, 2]
+
+    def test_empty_result(self):
+        idx = find_included_times(self.times, target_t=datetime(2023, 1, 2), twin=0)
+        assert idx == []
+
+
+class TestFindIncludedTimesPd:
+    times = [datetime(2023, 1, 1, h) for h in range(6)]
+
+    def test_range(self):
+        sd = datetime(2023, 1, 1, 1)
+        ed = datetime(2023, 1, 1, 4)
+        idx = find_included_times_pd(self.times, sd, ed)
+        assert 1 in idx and 2 in idx and 3 in idx
+        assert 0 not in idx and 4 not in idx
+
+
+class TestCollocateTimes:
+    times = [datetime(2023, 1, 1, h) for h in range(6)]
+
+    def test_exact_match_no_twin(self):
+        target = [datetime(2023, 1, 1, 2), datetime(2023, 1, 1, 4)]
+        idx = collocate_times(self.times, target_t=target, twin=0)
+        assert set(idx) == {2, 4}
+
+    def test_with_twin(self):
+        target = [datetime(2023, 1, 1, 1, 30)]
+        idx = collocate_times(self.times, target_t=target, twin=60)
+        assert 1 in idx and 2 in idx
+
+    def test_sdate_edate(self):
+        # upper bound is exclusive (find_included_times uses strict <)
+        sd = datetime(2023, 1, 1, 2)
+        ed = datetime(2023, 1, 1, 3)
+        idx = collocate_times(self.times, sdate=sd, edate=ed)
+        assert 2 in idx
+        assert 3 not in idx
+
+
+# ---------------------------------------------------------------------------
+# utils.geo
+# ---------------------------------------------------------------------------
+
+from wavy.utils.geo import (
+    haversineP,
+    haversine_np,
+    haversineA,
+    footprint_pulse_limited_radius,
+    convert_meteorologic_oceanographic,
+)
+
+
+class TestHaversine:
+    # Oslo (10.74E, 59.91N) → London (0.13W, 51.51N) ≈ 1156 km
+    lon1, lat1 = 10.74, 59.91
+    lon2, lat2 = -0.13, 51.51
+    expected_km = 1156
+
+    def test_haversineP_approx(self):
+        d = haversineP(self.lon1, self.lat1, self.lon2, self.lat2)
+        assert abs(d - self.expected_km) < 20
+
+    def test_haversine_np_approx(self):
+        d = haversine_np(self.lon1, self.lat1, self.lon2, self.lat2)
+        assert abs(d - self.expected_km) < 20
+
+    def test_haversineA_scalar(self):
+        d = haversineA(self.lon1, self.lat1, self.lon2, self.lat2)
+        assert isinstance(d, list)
+        assert abs(d[0] - self.expected_km) < 20
+
+    def test_haversineA_list(self):
+        lons1 = [self.lon1, self.lon1]
+        lats1 = [self.lat1, self.lat1]
+        lons2 = [self.lon2, self.lon2]
+        lats2 = [self.lat2, self.lat2]
+        d = haversineA(lons1, lats1, lons2, lats2)
+        assert len(d) == 2
+        assert all(abs(v - self.expected_km) < 20 for v in d)
+
+    def test_same_point_zero(self):
+        assert haversineP(10.0, 60.0, 10.0, 60.0) == pytest.approx(0.0, abs=1e-9)
+
+
+class TestConvertConvention:
+    def test_180_shift(self):
+        assert convert_meteorologic_oceanographic(0) == 180
+        assert convert_meteorologic_oceanographic(180) == 0
+
+    def test_wraps_360(self):
+        result = convert_meteorologic_oceanographic(270)
+        assert result == 90
+
+    def test_idempotent_double_conversion(self):
+        alpha = 45
+        assert (
+            convert_meteorologic_oceanographic(
+                convert_meteorologic_oceanographic(alpha)
+            )
+            == alpha
+        )
+
+
+class TestFootprintPulseLimitedRadius:
+    def test_returns_positive(self):
+        # Hs=2m, h=800km, tau=3.125ns (typical altimeter values)
+        r = footprint_pulse_limited_radius(Hs=2.0, h=800e3, tau=3.125e-9)
+        assert r > 0
+
+    def test_increases_with_Hs(self):
+        r1 = footprint_pulse_limited_radius(Hs=1.0, h=800e3, tau=3.125e-9)
+        r2 = footprint_pulse_limited_radius(Hs=4.0, h=800e3, tau=3.125e-9)
+        assert r2 > r1
+
+
+# ---------------------------------------------------------------------------
+# utils.stats
+# ---------------------------------------------------------------------------
+
+from wavy.utils.stats import (
+    runmean,
+    marginalize,
+    bootstr,
+    compute_quantiles,
+    calc_deep_water_T,
+    wave_length_mask_swim,
+)
+import xarray as xr
+
+
+class TestRunmean:
+    vec = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0])
+
+    def test_centered_mean(self):
+        out, _ = runmean(self.vec, win=3, mode="centered")
+        assert out[3] == pytest.approx(4.0)
+
+    def test_left_mean(self):
+        out, _ = runmean(self.vec, win=3, mode="left")
+        assert out[2] == pytest.approx(2.0)
+
+    def test_right_mean(self):
+        out, _ = runmean(self.vec, win=3, mode="right")
+        assert out[0] == pytest.approx(2.0)
+
+    def test_nan_at_edges(self):
+        out, _ = runmean(self.vec, win=3, mode="centered")
+        assert np.isnan(out[0])
+        assert np.isnan(out[-1])
+
+    def test_output_length(self):
+        out, std = runmean(self.vec, win=3, mode="centered")
+        assert len(out) == len(self.vec)
+        assert len(std) == len(self.vec)
+
+
+class TestMarginalize:
+    def test_removes_nans_single(self):
+        a = np.array([1.0, np.nan, 3.0, np.nan])
+        result = marginalize(a)
+        assert len(result) == 2
+        assert not np.any(np.isnan(result))
+
+    def test_removes_nans_pair(self):
+        a = np.array([1.0, np.nan, 3.0])
+        b = np.array([4.0, 5.0, np.nan])
+        a1, b1, idx = marginalize(a, b)
+        assert len(a1) == 1
+        assert a1[0] == pytest.approx(1.0)
+        assert b1[0] == pytest.approx(4.0)
+
+
+class TestBootstr:
+    def test_shape(self):
+        a = np.arange(10.0)
+        b, bidx = bootstr(a, reps=5)
+        assert b.shape == (10, 5)
+        assert bidx.shape == (10, 5)
+
+    def test_indices_in_range(self):
+        a = np.arange(8.0)
+        _, bidx = bootstr(a, reps=3)
+        assert bidx.min() >= 0
+        assert bidx.max() < len(a)
+
+
+class TestComputeQuantiles:
+    def test_median(self):
+        ts = np.arange(1.0, 11.0)
+        q = compute_quantiles(ts, [0.5])
+        assert q[0] == pytest.approx(5.5)
+
+    def test_extremes(self):
+        ts = np.arange(1.0, 11.0)
+        q = compute_quantiles(ts, [0.0, 1.0])
+        assert q[0] == pytest.approx(1.0)
+        assert q[1] == pytest.approx(10.0)
+
+    def test_ignores_nans(self):
+        ts = np.array([1.0, np.nan, 3.0])
+        q = compute_quantiles(ts, [0.5])
+        assert not np.isnan(q[0])
+
+
+class TestCalcDeepWaterT:
+    def test_known_wavelength(self):
+        # For λ=156m, T ≈ 10s in deep water
+        T = calc_deep_water_T(l=156.0)
+        assert abs(T - 10.0) < 0.2
+
+
+# ---------------------------------------------------------------------------
+# utils.io
+# ---------------------------------------------------------------------------
+
+from wavy.utils.io import make_pathtofile, make_subdict, NoStdStreams, get_size
+
+
+class TestMakeSubdict:
+    def test_present_keys(self):
+        result = make_subdict(["a", "b"], class_object_dict={"a": 1, "b": 2, "c": 3})
+        assert result == {"a": 1, "b": 2}
+
+    def test_missing_key_excluded(self):
+        result = make_subdict(["x"], class_object_dict={"a": 1})
+        assert "x" not in result
+
+    def test_none_strsublst(self):
+        result = make_subdict(None, class_object_dict={"a": 1})
+        assert result == {}
+
+
+class TestMakePathtofile:
+    def test_simple_substitution(self):
+        path = make_pathtofile("/data/{nID}/file.nc", ["{nID}"], {"{nID}": "s3a"})
+        assert path == "/data/s3a/file.nc"
+
+    def test_date_strftime(self):
+        date = datetime(2023, 6, 15)
+        path = make_pathtofile("/data/%Y/%m/file.nc", None, {}, date=date)
+        assert path == "/data/2023/06/file.nc"
+
+    def test_missing_key_leaves_path_unchanged(self):
+        # key not in subdict → template left as-is
+        path = make_pathtofile("/data/{nID}/file.nc", ["{nID}"], {})
+        assert "{nID}" in path
+
+
+class TestNoStdStreams:
+    def test_suppresses_stdout(self):
+        captured = io.StringIO()
+        with NoStdStreams(stdout=captured):
+            print("should be suppressed")
+        assert captured.getvalue() == "should be suppressed\n"
+
+    def test_restores_stdout_after(self):
+        original = sys.stdout
+        with NoStdStreams():
+            pass
+        assert sys.stdout is original
+
+
+class TestGetSize:
+    def test_int_positive(self):
+        assert get_size(42) > 0
+
+    def test_list_larger_than_empty(self):
+        assert get_size([1, 2, 3]) > get_size([])
+
+    def test_nested_dict(self):
+        assert get_size({"a": {"b": 1}}) > get_size({})
+
+
+# ---------------------------------------------------------------------------
+# utils.misc
+# ---------------------------------------------------------------------------
+
+from wavy.utils.misc import flatten, finditem, get_item_parent, get_item_child
+
+
+class TestFlatten:
+    def test_simple(self):
+        assert flatten([[1, 2], [3, 4]]) == [1, 2, 3, 4]
+
+    def test_empty_inner(self):
+        assert flatten([[], [1], []]) == [1]
+
+    def test_empty(self):
+        assert flatten([]) == []
+
+    def test_single_element_lists(self):
+        assert flatten([[1], [2], [3]]) == [1, 2, 3]
+
+
+class TestFinditem:
+    nested = {
+        "a": 1,
+        "b": {"c": 2, "d": {"e": 3}},
+        "f": [{"g": 4}, {"g": 5}],
+    }
+
+    def test_top_level_key(self):
+        assert finditem(self.nested, "a") == [1]
+
+    def test_nested_key(self):
+        assert finditem(self.nested, "e") == [3]
+
+    def test_key_in_list_of_dicts(self):
+        result = finditem(self.nested, "g")
+        assert set(result) == {4, 5}
+
+    def test_missing_key(self):
+        assert finditem(self.nested, "z") == []
+
+
+class TestGetItemParent:
+    ncdict = {
+        "var1": {"standard_name": "sea_surface_wave_significant_height", "units": "m"},
+        "var2": {"standard_name": "wind_speed", "units": "m s-1"},
+    }
+
+    def test_finds_by_standard_name(self):
+        result = get_item_parent(self.ncdict, "significant_height", "standard_name")
+        assert "var1" in result
+
+    def test_no_match_returns_none(self):
+        result = get_item_parent(self.ncdict, "temperature", "standard_name")
+        assert result is None
+
+
+class TestGetItemChild:
+    ncdict = {
+        "time": {"standard_name": "time", "units": "seconds since 1970-01-01"},
+        "Hs": {"standard_name": "sea_surface_wave_significant_height", "units": "m"},
+    }
+
+    def test_finds_child(self):
+        result = get_item_child(self.ncdict, "time")
+        assert len(result) == 1
+        assert result[0]["standard_name"] == "time"
+
+    def test_missing_returns_empty(self):
+        assert get_item_child(self.ncdict, "nonexistent") == []
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatibility: everything importable from wavy.utils directly
+# ---------------------------------------------------------------------------
+
+
+def test_backward_compat_imports():
+    from wavy.utils import (
+        parse_date,
+        flatten,
+        haversineA,
+        make_pathtofile,
+        collocate_times,
+        runmean,
+        build_xr_ds,
+        footprint_pulse_limited_radius,
+        NoStdStreams,
+        finditem,
+        marginalize,
+    )
+
+    assert callable(parse_date)
+    assert callable(flatten)
+    assert callable(haversineA)
