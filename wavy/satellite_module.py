@@ -25,6 +25,7 @@ from tqdm import tqdm
 import logging
 
 # own imports
+from wavy.logmod import get_logger
 from wavy.ncmod import ncdumpMeta
 from wavy.ncmod import get_filevarname
 from wavy.ncmod import find_attr_in_nc
@@ -62,12 +63,7 @@ variable_def = load_or_default('variable_def.yaml')
 
 # Module-level logger — INFO by default so progress messages are visible without extra setup.
 # Adjust verbosity with configure_logging() or the standard library directly.
-logger = logging.getLogger(__name__)
-if not logger.handlers:
-    _handler = logging.StreamHandler()
-    _handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
-    logger.addHandler(_handler)
-    logger.setLevel(logging.INFO)
+logger = get_logger(__name__)
 
 
 def configure_logging(level="DEBUG"):
