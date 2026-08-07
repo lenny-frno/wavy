@@ -1,8 +1,8 @@
 from wavy.satellite_module import satellite_class as sc
 from wavy.insitu_module import insitu_class as ic
 from wavy.model_module import model_class as mc
-from wavy.utils import parse_date, haversineA
-from wavy.utils import find_included_times
+from wavy.utils.dates import parse_date, find_included_times
+from wavy.utils.geo import haversineA
 from wavy.validationmod import validate, disp_validation
 import numpy as np
 import pandas as pd

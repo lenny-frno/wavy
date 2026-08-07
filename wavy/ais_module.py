@@ -4,7 +4,7 @@ import pandas as pd
 import os
 import json
 from wavy.credentials import credentials_from_netrc
-from wavy.utils import parse_date
+from wavy.utils.dates import parse_date
 
 
 def get_AIS_data(bbox, sd=None, ed=None, minspeed=0.5):

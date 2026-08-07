@@ -6,7 +6,7 @@ import pandas as pd
 import roaring_landmask
 from scipy.stats import circmean
 from datetime import timedelta
-from wavy.utils import flatten
+from wavy.utils.misc import flatten
 import cartopy.io.shapereader as shpreader
 from sklearn.neighbors import BallTree
 from pyproj import Proj, Geod
@@ -20,7 +20,7 @@ from shapely.geometry import Polygon, mapping
 
 
 # own imports
-from wavy.utils import find_included_times, collocate_times
+from wavy.utils.dates import find_included_times, collocate_times
 from wavy.wconfig import load_or_default
 
 ROAR = None
@@ -156,7 +156,7 @@ class filter_class:
         logger.setLevel(getattr(logging, log_level, logging.WARNING))
 
         print('Apply lanczos filter')
-        from wavy.utils import runmean
+        from wavy.utils.stats import runmean
         new = deepcopy(self)
         if isinstance(new.varalias, list):
             varalias = kwargs.get('varalias', new.varalias[0])
@@ -211,7 +211,7 @@ class filter_class:
         logger.setLevel(getattr(logging, log_level, logging.WARNING))
 
         print('Apply running mean filter')
-        from wavy.utils import runmean
+        from wavy.utils.stats import runmean
         new = deepcopy(self)
         if isinstance(new.varalias, list):
             varalias = kwargs.get('varalias', new.varalias[0])

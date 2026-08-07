@@ -25,12 +25,10 @@ import logging
 from wavy.ncmod import ncdumpMeta
 from wavy.ncmod import get_filevarname
 from wavy.ncmod import build_xr_ds_from_dict
-from wavy.utils import make_pathtofile, get_pathtofile
-from wavy.utils import finditem, make_subdict
-from wavy.utils import parse_date
-from wavy.utils import convert_meteorologic_oceanographic
-from wavy.utils import date_dispatcher
-from wavy.utils import flatten
+from wavy.utils.io import make_pathtofile, get_pathtofile, make_subdict
+from wavy.utils.misc import finditem, flatten
+from wavy.utils.dates import parse_date, date_dispatcher
+from wavy.utils.geo import convert_meteorologic_oceanographic
 from wavy.wconfig import load_or_default, load_dir
 from wavy.filter_module import filter_class as fc
 from wavy.quicklookmod import quicklook_class_sat as qls

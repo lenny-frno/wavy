@@ -31,8 +31,8 @@ import logging
 
 # own imports
 from wavy.wconfig import load_or_default
-from wavy.utils import find_included_times, finditem
-from wavy.utils import flatten
+from wavy.utils.dates import find_included_times
+from wavy.utils.misc import finditem, flatten
 
 # read yaml config files:
 insitu_dict = load_or_default('insitu_cfg.yaml')

@@ -9,7 +9,7 @@ import click
 from wavy.satellite_module import satellite_class as sc
 from datetime import datetime, timedelta
 import time
-from wavy.utils import parse_date
+from wavy.utils.dates import parse_date
 from pathlib import Path
 from wavy.wconfig import load_or_default
 # -------------------------------------------------------------------- #

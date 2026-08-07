@@ -23,13 +23,10 @@ import logging
 
 # own imports
 from wavy.logmod import get_logger
-from wavy.utils import hour_rounder, make_fc_dates
-from wavy.utils import finditem, parse_date
-from wavy.utils import convert_meteorologic_oceanographic
-from wavy.utils import date_dispatcher
-from wavy.utils import find_direction_convention
-from wavy.utils import flatten
-from wavy.utils import make_pathtofile, make_subdict
+from wavy.utils.dates import hour_rounder, make_fc_dates, parse_date, date_dispatcher
+from wavy.utils.misc import finditem, flatten
+from wavy.utils.geo import convert_meteorologic_oceanographic, find_direction_convention
+from wavy.utils.io import make_pathtofile, make_subdict
 
 from wavy.credentials import get_credentials
 

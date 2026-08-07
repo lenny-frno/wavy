@@ -21,9 +21,8 @@ import logging
 import copernicusmarine as cmc
 
 # own imports
-from wavy.utils import sort_files
-from wavy.utils import make_pathtofile, make_subdict
-from wavy.utils import date_dispatcher
+from wavy.utils.io import sort_files, make_pathtofile, make_subdict
+from wavy.utils.dates import date_dispatcher
 from wavy.credentials import get_credentials
 from wavy.wconfig import load_or_default
 # ---------------------------------------------------------------------#

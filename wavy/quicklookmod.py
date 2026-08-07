@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt
 
 # own imports
 from wavy.wconfig import load_or_default
-from wavy.utils import parse_date
-from wavy.utils import compute_quantiles
+from wavy.utils.dates import parse_date
+from wavy.utils.stats import compute_quantiles
 from wavy.validationmod import linreg_evm, linreg_std
 
 # read yaml config files:

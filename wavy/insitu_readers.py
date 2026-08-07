@@ -27,15 +27,11 @@ from wavy.ncmod import ncdumpMeta
 from wavy.ncmod import get_varlst_from_nc_1D
 from wavy.ncmod import get_filevarname
 from wavy.ncmod import read_netcdfs
-from wavy.utils import collocate_times
-from wavy.utils import get_pathtofile
-from wavy.utils import convert_meteorologic_oceanographic
-from wavy.utils import make_subdict
-from wavy.utils import parse_date
-from wavy.utils import flatten
-from wavy.utils import find_direction_convention
-from wavy.utils import build_xr_ds, build_xr_ds_multivar
-from wavy.utils import date_dispatcher
+from wavy.utils.dates import collocate_times, parse_date, date_dispatcher
+from wavy.utils.io import get_pathtofile, make_subdict
+from wavy.utils.geo import convert_meteorologic_oceanographic, find_direction_convention
+from wavy.utils.misc import flatten
+from wavy.utils.xr_tools import build_xr_ds, build_xr_ds_multivar
 from wavy.wconfig import load_or_default
 # ---------------------------------------------------------------------#
 # read yaml config files:

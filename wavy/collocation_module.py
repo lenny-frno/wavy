@@ -24,11 +24,9 @@ import logging
 
 # own imports
 from wavy.logmod import get_logger
-from wavy.utils import collocate_times
-from wavy.utils import hour_rounder_pd, hour_rounder
-from wavy.utils import parse_date
-from wavy.utils import flatten
-from wavy.utils import haversineA
+from wavy.utils.dates import collocate_times, hour_rounder_pd, hour_rounder, parse_date
+from wavy.utils.misc import flatten
+from wavy.utils.geo import haversineA
 from wavy.wconfig import load_or_default
 from wavy.model_module import model_class as mc
 from wavy.gridder_module import gridder_class as gc

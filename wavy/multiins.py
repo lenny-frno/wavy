@@ -10,12 +10,12 @@ field related data from multiple insitu locations.
 import numpy as np
 
 # own imports
-from wavy.utils import parse_date
+from wavy.utils.dates import parse_date
 from wavy.wconfig import load_or_default
 from wavy.insitu_module import insitu_class as ic
 from wavy.quicklookmod import quicklook_class_sat as qls
 from wavy.consolidate import consolidate_class as cs
-from wavy.utils import find_tagged_obs, expand_nID_for_sensors
+from wavy.utils.misc import find_tagged_obs, expand_nID_for_sensors
 # ---------------------------------------------------------------------#
 
 # read yaml config files:

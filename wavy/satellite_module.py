@@ -30,14 +30,10 @@ from wavy.ncmod import ncdumpMeta
 from wavy.ncmod import get_filevarname
 from wavy.ncmod import find_attr_in_nc
 
-from wavy.utils import NoStdStreams
-from wavy.utils import find_included_times
-from wavy.utils import parse_date
-from wavy.utils import make_pathtofile, make_subdict
-from wavy.utils import finditem, haversineA
-from wavy.utils import flatten
-from wavy.utils import date_dispatcher
-from wavy.utils import convert_meteorologic_oceanographic
+from wavy.utils.io import NoStdStreams, make_pathtofile, make_subdict
+from wavy.utils.dates import find_included_times, parse_date, date_dispatcher
+from wavy.utils.misc import finditem, flatten
+from wavy.utils.geo import haversineA, convert_meteorologic_oceanographic
 
 from wavy.model_module import read_model_nc_output_lru
 from wavy.model_module import model_class as mc
@@ -47,7 +43,7 @@ from wavy.wconfig import load_or_default, load_dir
 from wavy.filter_module import filter_class as fc
 from wavy.quicklookmod import quicklook_class_sat as qls
 from wavy.init_class_sat import init_class
-from wavy.utils import footprint_pulse_limited_radius
+from wavy.utils.geo import footprint_pulse_limited_radius
 
 from wavy.wave_parameters import pseudo_wave_age
 from wavy.wave_parameters import altimeter_Tz

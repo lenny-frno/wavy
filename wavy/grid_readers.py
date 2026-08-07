@@ -15,7 +15,7 @@ import logging
 # own imports
 from wavy.ncmod import get_filevarname
 from wavy.wconfig import load_or_default
-from wavy.utils import parse_date
+from wavy.utils.dates import parse_date
 # ---------------------------------------------------------------------#
 
 # read yaml config files:

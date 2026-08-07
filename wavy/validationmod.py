@@ -208,7 +208,7 @@ def validate(results_dict, boot=None):
             'SI': SI,
             'mar': mar}
     elif boot is True:
-        from wavy.utils import bootstr, marginalize
+        from wavy.utils.stats import bootstr, marginalize
         reps = 1000
         newmodel, newobs, _ = marginalize(model_matches, obs_matches)
         obs_boot, boot_idx = bootstr(newobs, reps)
