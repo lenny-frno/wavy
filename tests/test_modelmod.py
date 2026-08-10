@@ -8,6 +8,7 @@ from wavy.errors import (
     ModelReadError,
 )
 import pytest
+import logging
 
 
 def test_model_class_init():
