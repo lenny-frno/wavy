@@ -1,4 +1,5 @@
 from wavy.model_module import model_class as mc
+from wavy.errors import ModelFileSearchError
 import pytest
 import logging
 
@@ -19,18 +20,20 @@ def test_ww3_4km_reader():
     assert len(mco.vars.keys()) == 3
 
 
-def test_dummy_reader(caplog):
-    with caplog.at_level(logging.WARNING, logger="wavy.model_module"):
-        mco = mc(nID="dummy_model", sd="2023-6-1", ed="2023-6-1 01")
-        assert mco.__class__.__name__ == "model_class"
+def test_dummy_reader():
+    """
+    Test that the dummy model_class raises a ModelFileSearchError when populate is called.
+    Treats the case where the model class is configured or initialized with the wrong src_tmplt/fl_tmplt, which will cause the model_class to fail to find a model file.
+    """
+    mco = mc(nID="dummy_model", sd="2023-6-1", ed="2023-6-1 01")
+    assert mco.__class__.__name__ == "model_class"
+
+    with pytest.raises(
+        ModelFileSearchError, match="Reached maximum number of attempts \\(2\\)"
+    ):
         mco.populate(max_iter=2)
 
     assert not hasattr(mco, "vars")
-
-    # confirm the loop gave up cleanly rather than hanging/crashing
-    errors = [r.message for r in caplog.records if r.levelname == "ERROR"]
-    assert len(errors) == 2  # one per fc_date (00:00 and 01:00)
-    assert all("Reached maximum number of attempts (2)" in e for e in errors)
 
 
 @pytest.mark.need_credentials

@@ -43,6 +43,8 @@ from wavy.quicklookmod import quicklook_class_sat as qls
 
 from wavy.init_class_mod import init_class
 
+from wavy.errors import ModelFileSearchError
+
 # ---------------------------------------------------------------------#
 
 
@@ -430,18 +432,16 @@ class model_class(qls):
                         )
                         break
                     if n_iter >= max_iter:
-                        logger.error(
+                        msg = (
                             "Reached maximum number of attempts ("
                             + str(max_iter)
-                            + ") while searching for an "
-                            + "accessible model file for fc_date="
-                            + str(fc_date)
-                            + ". Check that 'src_tmplt' "
-                            + "and 'fl_tmplt' in the model config point "
-                            + "to a valid, existing path."
+                            + ") while searching for an accessible model file for "
+                            "fc_date=" + str(fc_date) + ". Check that 'src_tmplt' "
+                            "and 'fl_tmplt' in the model config point to a valid, "
+                            "existing path."
                         )
-                        filename = None
-                        break
+                        logger.error(msg)
+                        raise ModelFileSearchError(msg)
             else:
                 filename = None
         elif isinstance(fc_date, list) and isinstance(leadtime, int):
