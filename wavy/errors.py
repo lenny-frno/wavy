@@ -33,6 +33,16 @@ class MissingConfigKeyError(ConfigError):
     pass
 
 
+class ModelPathTemplateError(ConfigError):
+    """
+    Raised when building a filesystem path from a model's
+    src_tmplt/strsub configuration fails. Indicates a config problem,
+    not a per-date data-availability problem.
+    """
+
+    pass
+
+
 # --- model data ------------------------------------------------------- #
 
 
@@ -52,8 +62,24 @@ class ModelFileSearchError(ModelError):
     pass
 
 
+class ModelReadError(ModelError):
+    """Raised when a model's reader function fails to read data."""
+
+    pass
+
+
+class ModelProcessingError(ModelError):
+    """
+    Raised when post-read processing (renaming, CF compliance,
+    convention enforcement, longitude formatting) fails after the
+    reader itself succeeded.
+    """
+
+    pass
+
+
 class ModelFileNotFoundError(ModelError):
-    """No model file could be found for the requested period at all."""
+    """No accessible model files were found for the requested period."""
 
     pass
 
