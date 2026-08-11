@@ -43,6 +43,16 @@ class ModelPathTemplateError(ConfigError):
     pass
 
 
+class RegionNotDefinedError(ConfigError):
+    """
+    Raised when a requested region is not defined in any known region
+    source (region_cfg.yaml's rect/poly/geojson sections, or as a
+    model grid in model_cfg.yaml).
+    """
+
+    pass
+
+
 # --- model data ------------------------------------------------------- #
 
 
@@ -84,11 +94,65 @@ class ModelFileNotFoundError(ModelError):
     pass
 
 
+class GridRetrievalError(ModelError):
+    """
+    Raised when model grid coordinates needed for region matching
+    could not be retrieved, even after falling back to the model's
+    default/configured grid_date.
+    """
+
+    pass
+
+
 # --- satellite data --------------------------------------------------- #
 
 
 class SatelliteError(WavyError):
     """Base class for satellite_module-related errors."""
+
+    pass
+
+
+class SatellitePathTemplateError(ConfigError):
+    """
+    Raised when building a filesystem path from a satellite's
+    src_tmplt/strsub configuration fails. Indicates a config problem,
+    not a per-date data-availability problem.
+    """
+
+    pass
+
+
+class SatelliteFileNotFoundError(SatelliteError):
+    """No accessible satellite files were found for the requested period."""
+
+    pass
+
+
+class SatelliteReadError(SatelliteError):
+    """
+    Raised when none of the candidate satellite files could be read
+    successfully.
+    """
+
+    pass
+
+
+class SatelliteProcessingError(SatelliteError):
+    """
+    Raised when post-read processing (renaming, CF compliance,
+    convention enforcement, longitude formatting) fails after at
+    least one file was read successfully.
+    """
+
+    pass
+
+
+class SatelliteVariableError(SatelliteError):
+    """
+    Raised when a required coordinate/variable name could not be
+    resolved or renamed in the satellite data.
+    """
 
     pass
 
