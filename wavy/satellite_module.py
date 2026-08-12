@@ -568,28 +568,54 @@ class satellite_class(qls, fc):
         logger.info(" changing variables to aliases")
         new = deepcopy(self)
         # variables
+        ## TODO: REFACTOR
         for v in new.varalias:
-            ncvar = get_filevarname(
-                v, variable_def, satellite_dict[new.nID], new.meta, **kwargs
-            )
-            if v in list(new.vars.keys()):
+            if v in new.vars.variables:
                 logger.debug(
                     "  "
-                    + ncvar
-                    + " is alreade named correctly and"
+                    + v
+                    + " is already named correctly and"
                     + " therefore not adjusted"
                 )
-            else:
-                new.vars = new.vars.rename({ncvar: v})
+                continue
+            try:
+                ncvar = get_filevarname(
+                    v, variable_def, satellite_dict[new.nID], new.meta, **kwargs
+                )
+            except (KeyError, ValueError) as e:
+                raise SatelliteVariableError(
+                    "Could not determine the source variable name for "
+                    "variable '"
+                    + v
+                    + "' for nID="
+                    + str(new.nID)
+                    + ". Check 'vardef' in the satellite config and "
+                    "'variable_def.yaml'."
+                ) from e
+            if ncvar not in new.vars.variables:
+                raise SatelliteVariableError(
+                    "Resolved source name '" + str(ncvar) + "' for "
+                    "variable '"
+                    + v
+                    + "' (nID="
+                    + str(new.nID)
+                    + ") does not exist in the dataset returned by the "
+                    "reader. This usually means the reader already "
+                    "normalized this variable under a different name, "
+                    "or 'vardef' in the satellite config is out of "
+                    "sync with what the reader actually produces."
+                )
+            new.vars = new.vars.rename({ncvar: v})
         # coords
+        ## TODO: REFACTOR
         coords = ["time", "lons", "lats"]
         for c in coords:
 
-            if c in list(new.vars.keys()):
+            if c in new.vars.variables:
                 logger.debug(
                     "  "
                     + c
-                    + " is alreade named correctly and"
+                    + " is already named correctly and"
                     + " therefore not adjusted"
                 )
                 continue
@@ -607,6 +633,19 @@ class satellite_class(qls, fc):
                     + ". Check 'vardef' in the satellite config and "
                     "'variable_def.yaml'."
                 ) from e
+            if ncvar not in new.vars.variables:
+                raise SatelliteVariableError(
+                    "Resolved source name '" + str(ncvar) + "' for "
+                    "coordinate '"
+                    + c
+                    + "' (nID="
+                    + str(new.nID)
+                    + ") does not exist in the dataset returned by the "
+                    "reader. This usually means the reader already "
+                    "normalized this coordinate under a different "
+                    "name, or 'vardef' in the satellite config is out "
+                    "of sync with what the reader actually produces."
+                )
             new.vars = new.vars.rename({ncvar: c})
 
         return new
