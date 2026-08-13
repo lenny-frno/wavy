@@ -41,7 +41,14 @@ from wavy.grid_stats import apply_metric
 from wavy.quicklookmod import quicklook_class_sat as qls
 from wavy.validationmod import validate, disp_validation
 
-from wavy.errors import CollocationBuildError, CollocationError, CollocationInputError, CollocationRunError, ModelFileSearchError
+from wavy.errors import (
+    CollocationBuildError,
+    CollocationError,
+    CollocationInputError,
+    CollocationRunError,
+    ModelFileSearchError,
+)
+
 # ---------------------------------------------------------------------#
 
 # read yaml config files:
@@ -311,7 +318,7 @@ class collocation_class(qls):
             CollocationRunError - any other unexpected failure during
                 collocation.
         """
-        
+
         logger = logging.getLogger(__name__)
         log_level = str(kwargs.get("logging", "WARNING").upper())
         logger.setLevel(getattr(logging, log_level, logging.WARNING))
@@ -340,14 +347,20 @@ class collocation_class(qls):
             )
 
             new = new._drop_duplicates(**kwargs)
-            
+
         except CollocationError:
             raise
         except Exception as e:
             raise CollocationRunError(
-                "Collocation failed for nID=" + str(self.nID) +
-                ", model=" + str(self.model) + ", period " +
-                str(self.sd) + " to " + str(self.ed) + "."
+                "Collocation failed for nID="
+                + str(self.nID)
+                + ", model="
+                + str(self.model)
+                + ", period "
+                + str(self.sd)
+                + " to "
+                + str(self.ed)
+                + "."
             ) from e
         # add class variables
         print("# ----- ")
@@ -453,8 +466,11 @@ class collocation_class(qls):
         except (KeyError, ValueError) as e:
             raise CollocationBuildError(
                 "Could not assemble the collocated xarray Dataset for "
-                "nID=" + str(self.nID) + ", model=" + str(self.model) +
-                " - a key expected in the collocation results or in "
+                "nID="
+                + str(self.nID)
+                + ", model="
+                + str(self.model)
+                + " - a key expected in the collocation results or in "
                 "'variable_def.yaml' was missing or invalid."
             ) from e
         return ds
@@ -590,9 +606,8 @@ class collocation_class(qls):
             **{"obs_" + v: [] for v in self.varalias_obs},
         }
 
-        
-        n_dates_failed += 1n_dates_failed = 0
-        
+        n_dates_failed = 0
+
         for i in tqdm(range(len(fc_date))):
             logger.info(fc_date[i])
             try:
@@ -690,15 +705,15 @@ class collocation_class(qls):
                 # ValueError, pass if no collocation
                 # FileNotFoundError, pass if file not accessible
                 # OSError, pass if file not accessible from thredds
-                logger.warning(
-                    "Skipping fc_date=" + str(fc_date[i]) + ": " + str(e))
+                logger.warning("Skipping fc_date=" + str(fc_date[i]) + ": " + str(e))
                 logger.debug(e, exc_info=True)
                 n_dates_failed += 1
         if len(fc_date) > 0 and n_dates_failed == len(fc_date):
             raise CollocationRunError(
                 "None of the " + str(len(fc_date)) + " candidate "
-                "forecast dates could be collocated for model=" +
-                str(self.model) + " (all failed). Check model "
+                "forecast dates could be collocated for model="
+                + str(self.model)
+                + " (all failed). Check model "
                 "availability/config for the requested period."
             )
         # flatten all aggregated entries
@@ -844,15 +859,14 @@ class collocation_class(qls):
         CollocationInputError - no observation data, no model
             specified, or an unrecognized collocation method.
         """
-        if self.oco is None and len(self.oco.vars[self.oco.stdvarname]) < 1:
+        if self.oco is None or len(self.oco.vars[self.varalias_obs]) < 1:
             raise CollocationInputError(
                 "Collocation not possible: no observation values "
                 "available (oco is None or oco.vars is empty)."
             )
         if self.model is None:
             raise CollocationInputError(
-                "Collocation not possible: no model specified for "
-                "collocation."
+                "Collocation not possible: no model specified for " "collocation."
             )
         if (self.model is not None) and (self.oco is not None):
             if self.method == "closest":
@@ -861,9 +875,10 @@ class collocation_class(qls):
                 results_dict = self._collocate_regridded_model(**kwargs)
             else:
                 raise CollocationInputError(
-                "Unknown collocation method '" + str(self.method) +
-                "'. Expected 'closest' or 'regridded'."
-            )
+                    "Unknown collocation method '"
+                    + str(self.method)
+                    + "'. Expected 'closest' or 'regridded'."
+                )
 
         return results_dict
 
