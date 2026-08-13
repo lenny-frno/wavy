@@ -164,3 +164,42 @@ class StationError(WavyError):
     """Base class for station_module-related errors."""
 
     pass
+
+
+# --- collocation ---------------------------------------------------------- #
+
+
+class CollocationError(WavyError):
+    """Base class for collocation_class-related errors."""
+
+    pass
+
+
+class CollocationInputError(CollocationError):
+    """
+    Raised when collocation preconditions are not met - e.g. no
+    observation data (oco), no model specified, or an unrecognized
+    collocation method.
+    """
+
+    pass
+
+
+class CollocationBuildError(CollocationError):
+    """
+    Raised when the collocated xarray Dataset could not be assembled
+    from the intermediate collocation results (missing/mismatched
+    keys between results_dict and variable_def.yaml).
+    """
+
+    pass
+
+
+class CollocationRunError(CollocationError):
+    """
+    Raised when the collocation process itself fails - either an
+    unexpected error during populate()/collocate(), or every
+    candidate forecast date failed to collocate.
+    """
+
+    pass
