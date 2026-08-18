@@ -42,8 +42,8 @@ class PlotContext:
     plot_var: Any
     plot_lons: Any
     plot_lats: Any
-    plot_var_obs: Any       # None when data is not collocated
-    plot_var_model: Any     # None when data is not collocated
+    plot_var_obs: Any  # None when data is not collocated
+    plot_var_model: Any  # None when data is not collocated
     fs: int
     cmap: Any
     projection: Any
@@ -75,10 +75,10 @@ class quicklook_class_sat:
     # Registry drives quicklook() dispatching.
     # Each entry maps the enabling kwarg to plot metadata.
     _PLOT_REGISTRY: dict = {
-        "m":    {"method": "plot_map",        "default": True,  "needs_colloc": False},
-        "ts":   {"method": "plot_timeseries", "default": True,  "needs_colloc": False},
-        "sc":   {"method": "plot_scat",       "default": False, "needs_colloc": True},
-        "hist": {"method": "plot_hist",       "default": False, "needs_colloc": True},
+        "m": {"method": "plot_map", "default": True, "needs_colloc": False},
+        "ts": {"method": "plot_timeseries", "default": True, "needs_colloc": False},
+        "sc": {"method": "plot_scat", "default": False, "needs_colloc": True},
+        "hist": {"method": "plot_hist", "default": False, "needs_colloc": True},
     }
 
     # ------------------------------------------------------------------
@@ -313,9 +313,7 @@ class quicklook_class_sat:
         auto_title = (
             self.nID
             + "\nfrom "
-            + parse_date(str(self.vars["time"][0].values)).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
+            + parse_date(str(self.vars["time"][0].values)).strftime("%Y-%m-%d %H:%M:%S")
             + " to "
             + parse_date(str(self.vars["time"][-1].values)).strftime(
                 "%Y-%m-%d %H:%M:%S"
@@ -404,9 +402,7 @@ class quicklook_class_sat:
             except Exception:
                 pass
         else:
-            raise ValueError(
-                f"mode must be 'comb' or 'indiv', got {ctx.mode!r}"
-            )
+            raise ValueError(f"mode must be 'comb' or 'indiv', got {ctx.mode!r}")
 
         ax.set_ylabel(f"{ctx.varalias} [{ctx.units}]")
         ax.legend(loc="best")
