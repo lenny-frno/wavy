@@ -1,5 +1,6 @@
 """
 Module for quicklook fct
+Module for quicklook fct
 """
 
 # imports
@@ -92,7 +93,12 @@ class quicklook_class_sat:
             assert varalias in self.varalias, "varalias must be one of {}".format(
                 self.varalias
             )
+            varalias = kwargs.get("varalias", self.varalias[0])
+            assert varalias in self.varalias, "varalias must be one of {}".format(
+                self.varalias
+            )
             assert isinstance(varalias, str), "varalias argument should be a string"
+            idx_units = np.argwhere(np.array(self.varalias) == varalias)[0][0]
             idx_units = np.argwhere(np.array(self.varalias) == varalias)[0][0]
             units_to_plot = self.units[idx_units]
         else:
@@ -122,8 +128,19 @@ class quicklook_class_sat:
                 "specify varalias to validate a different variable."
             )
             plot_var = self.vars["obs_" + varalias]
+            assert "model_" + varalias in list_vars, (
+                f"model_{varalias} is missing in the dataset; "
+                "specify varalias to validate a different variable."
+            )
+            assert "obs_" + varalias in list_vars, (
+                f"obs_{varalias} is missing in the dataset; "
+                "specify varalias to validate a different variable."
+            )
+            plot_var = self.vars["obs_" + varalias]
             plot_lons = self.vars.obs_lons
             plot_lats = self.vars.obs_lats
+            plot_var_obs = self.vars["obs_" + varalias]
+            plot_var_model = self.vars["model_" + varalias]
             plot_var_obs = self.vars["obs_" + varalias]
             plot_var_model = self.vars["model_" + varalias]
 
@@ -131,6 +148,7 @@ class quicklook_class_sat:
             if len(plot_lons.shape) < 2:
                 plot_lons, plot_lats = np.meshgrid(plot_lons, plot_lats)
 
+        fs = kwargs.get("fs", 12)
         fs = kwargs.get("fs", 12)
         vartype = variable_info[varalias].get("type", "default")
         if kwargs.get("cmap") is None:
@@ -379,6 +397,7 @@ class quicklook_class_sat:
 
         elif ctx.mode == "indiv":
             for oco in self.ocos:
+
                 ax.plot(
                     oco.vars["time"],
                     oco.vars[ctx.varalias],
