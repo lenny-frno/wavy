@@ -180,7 +180,7 @@ def compute_distance_to_ice(
     return distance_array
 
 
-def get_dist_to_ice_edge(
+def get_dist_to_ice(
     pts_lons,
     pts_lats,
     model_time,
