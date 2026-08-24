@@ -82,27 +82,79 @@ def _datetime_difference_seconds(times, target):
 @lru_cache(maxsize=8)
 def read_spectral_file(filename, **kwargs):
     """
-    Read a spectral file using wavespectra.
+    Read a spectral NetCDF file using wavespectra.
 
-    The result is cached because the same spectral file will normally
-    be queried many times during one collocation operation.
+    The dataset is normalized to the wavespectra conventions:
+        efth(time, site, freq, dir)
 
-    Parameters
-    ----------
-    filename : str
-        Path to spectral NetCDF file.
-
-    Returns
-    -------
-    xarray.Dataset
-        Spectral dataset returned by wavespectra.
+    The returned object is cached because the same spectral file is
+    normally queried many times during collocation.
     """
     _check_wavespectra()
 
     logger = logging.getLogger(__name__)
     logger.debug("Reading spectral file: %s", filename)
 
-    return read_netcdf(filename, **kwargs)
+    read_kwargs = {
+        "freqname": kwargs.get("freq_name", "freq"),
+        "dirname": kwargs.get("dir_name", "dir"),
+        "sitename": kwargs.get("point_dim", "site"),
+        "specname": kwargs.get("spec_name", "efth"),
+        "lonname": kwargs.get("lon_name", "lon"),
+        "latname": kwargs.get("lat_name", "lat"),
+        "timename": kwargs.get("time_name", "time"),
+    }
+
+    # Don't pass arbitrary collocation kwargs to read_netcdf.
+    if kwargs.get("chunks") is not None:
+        read_kwargs["chunks"] = kwargs["chunks"]
+
+    ds = read_netcdf(filename, **read_kwargs)
+
+    # ------------------------------------------------------------------
+    # Make sure the spectral dimensions actually exist.
+    # ------------------------------------------------------------------
+    if "efth" not in ds:
+        raise KeyError(
+            "wavespectra did not produce an 'efth' variable. "
+            f"Available variables: {list(ds.data_vars)}"
+        )
+
+    spec = ds["efth"]
+
+    if "freq" not in spec.dims:
+        raise ValueError(
+            "Spectral energy variable 'efth' has no 'freq' dimension. "
+            f"Dimensions are: {spec.dims}"
+        )
+
+    if "dir" not in spec.dims:
+        raise ValueError(
+            "Spectral energy variable 'efth' has no 'dir' dimension. "
+            f"Dimensions are: {spec.dims}"
+        )
+
+    # wavespectra expects frequency and direction to be available
+    # as coordinates on the spectral DataArray.
+    if "freq" not in spec.coords:
+        raise ValueError(
+            "The 'efth' DataArray has a freq dimension but no freq "
+            "coordinate."
+        )
+
+    if "dir" not in spec.coords:
+        raise ValueError(
+            "The 'efth' DataArray has a dir dimension but no dir "
+            "coordinate."
+        )
+
+    logger.debug(
+        "Read spectral dataset: dimensions=%s, variables=%s",
+        ds.dims,
+        list(ds.data_vars),
+    )
+
+    return ds
 
 
 # ---------------------------------------------------------------------#
@@ -290,32 +342,18 @@ def extract_point_spectrum(
     """
     Extract one spectrum from an unstructured spectral Dataset.
 
-    Parameters
-    ----------
-    ds : xarray.Dataset
-    point_index : int
-        Index of nearest spectral point.
-    time_index : int
-        Index of nearest spectral time.
-    point_dim : str, optional
-        Dimension containing spectral points.
-    time_name : str, optional
-
-    Returns
-    -------
-    xarray.Dataset
-        One-point, one-time spectral Dataset.
+    Returns a Dataset containing one spectrum with dimensions:
+        freq, dir
     """
+
     if point_dim is None:
-        candidates = [
+        for candidate in [
             "site",
             "station",
             "point",
             "node",
             "location",
-        ]
-
-        for candidate in candidates:
+        ]:
             if candidate in ds.dims:
                 point_dim = candidate
                 break
@@ -337,12 +375,44 @@ def extract_point_spectrum(
             "Could not identify spectral time dimension."
         )
 
-    return ds.isel(
+    # Select the spectrum.
+    spectrum = ds.isel(
         {
             point_dim: point_index,
             time_name: time_index,
         }
     )
+
+    # Remove singleton dimensions created by the selection.
+    spectrum = spectrum.squeeze(drop=True)
+
+    # ------------------------------------------------------------------
+    # Keep only what is needed by wavespectra.
+    # ------------------------------------------------------------------
+    if "efth" not in spectrum:
+        raise KeyError(
+            "Spectral Dataset does not contain 'efth'."
+        )
+
+    efth = spectrum["efth"]
+
+    if "freq" not in efth.dims or "dir" not in efth.dims:
+        raise ValueError(
+            "Extracted spectrum does not have the expected "
+            f"(freq, dir) dimensions. Got {efth.dims}"
+        )
+
+    if "freq" not in efth.coords:
+        raise ValueError(
+            "Extracted spectrum has no 'freq' coordinate."
+        )
+
+    if "dir" not in efth.coords:
+        raise ValueError(
+            "Extracted spectrum has no 'dir' coordinate."
+        )
+
+    return spectrum
 
 
 # ---------------------------------------------------------------------#
@@ -360,39 +430,73 @@ def partition_spectrum(
     Parameters
     ----------
     spectrum : xarray.Dataset
-        Single-point spectrum.
+        Single-point, single-time spectral Dataset.
     method : str
-        wavespectra partitioning method.
+        wavespectra partitioning method, e.g. 'ptm1', 'ptm2'.
 
     Returns
     -------
     xarray.Dataset
         Partitioned spectrum.
     """
-    # wavespectra exposes partitioning through the SpecArray accessor.
-    #
-    # Keep this wrapper deliberately small so the exact partitioning
-    # algorithm can be changed through configuration without affecting
-    # the collocation code.
 
-    if not hasattr(spectrum, "spec"):
-        raise AttributeError(
-            "The supplied Dataset does not expose the wavespectra "
-            "`spec` accessor."
+    if "efth" not in spectrum:
+        raise KeyError(
+            "Spectrum Dataset must contain 'efth'."
         )
 
-    spec = spectrum.spec
+    efth = spectrum["efth"]
 
-    if not hasattr(spec, "partition"):
-        raise AttributeError(
-            "Installed wavespectra version does not expose "
-            "`spec.partition`."
+    if "freq" not in efth.dims:
+        raise ValueError(
+            f"'efth' must have a freq dimension, got {efth.dims}"
         )
 
-    return spec.partition(
-        method=method,
-        **kwargs
-    )
+    if "dir" not in efth.dims:
+        raise ValueError(
+            f"'efth' must have a dir dimension, got {efth.dims}"
+        )
+
+    # Access the wavespectra partition namespace.
+    partition = efth.spec.partition
+
+    method = method.lower()
+
+    if not hasattr(partition, method):
+        raise ValueError(
+            f"Unknown wavespectra partition method '{method}'. "
+            f"Available methods include: "
+            f"ptm1, ptm2, ptm3, ptm4, ptm5, hp01, bbox."
+        )
+
+    partition_method = getattr(partition, method)
+
+    # ---------------------------------------------------------------
+    # PTM methods require environmental fields.
+    # ---------------------------------------------------------------
+    if method in ("ptm1", "ptm2", "ptm1_track"):
+        required = ["wspd", "wdir", "dpt"]
+
+        missing = [
+            name for name in required
+            if name not in spectrum
+        ]
+
+        if missing:
+            raise KeyError(
+                f"Partition method '{method}' requires the following "
+                f"variables in the spectral Dataset: {missing}. "
+                f"Available variables: {list(spectrum.data_vars)}"
+            )
+
+        return partition_method(
+            wspd=spectrum["wspd"],
+            wdir=spectrum["wdir"],
+            dpt=spectrum["dpt"],
+            **kwargs,
+        )
+
+    return partition_method(**kwargs)
 
 
 # ---------------------------------------------------------------------#
@@ -401,40 +505,35 @@ def partition_spectrum(
 
 def classify_wave_regime(
     partitioned,
-    wind_sea_threshold=0.5,
-    swell_threshold=0.5,
-    mixed_threshold=0.2,
+    wind_sea_fraction=0.5,
+    swell_dominated_fraction=0.5,
 ):
-    """
-    Classify a partitioned spectrum into a simple wave regime.
+    stats = partitioned.spec.stats(["hs"])
 
-    IMPORTANT:
-        The exact regime definition is project-specific.  This function
-        therefore provides a transparent default which should be replaced
-        or configured if a scientific definition already exists.
+    hs = np.asarray(stats["hs"].values).squeeze()
+    hs = hs[np.isfinite(hs)]
 
-    Returns
-    -------
-    int
-        Regime code.
+    if hs.size == 0:
+        return np.nan
 
-    Notes
-    -----
-    Suggested codes:
+    total_energy = np.sum(hs ** 2)
 
-        0 = wind-sea dominated
-        1 = mixed
-        2 = swell dominated
-    """
-    # This function intentionally does not assume a particular wavespectra
-    # partition Dataset layout.  The classification should be implemented
-    # against the variables produced by the selected partitioning method.
+    if total_energy <= 0:
+        return np.nan
 
-    raise NotImplementedError(
-        "Implement the project-specific wave-regime classification "
-        "against the output of the selected wavespectra partitioning "
-        "method."
-    )
+    wind_sea_energy = hs[0] ** 2
+    swell_energy = np.sum(hs[1:] ** 2)
+
+    wind_fraction = wind_sea_energy / total_energy
+    swell_fraction = swell_energy / total_energy
+
+    if wind_fraction >= wind_sea_fraction:
+        return 0
+
+    if swell_fraction >= swell_dominated_fraction:
+        return 2
+
+    return 1
 
 
 # ---------------------------------------------------------------------#
