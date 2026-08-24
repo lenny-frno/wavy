@@ -583,9 +583,7 @@ def collocate_spectra(
 
     lons = np.asarray(lons)
     lats = np.asarray(lats)
-    times = np.asarray(times)# Observation times used for spectral collocation
-    obs_time = pd.to_datetime(new.vars['obs_time'].values)
-    unique_times = pd.unique(new.vars['model_time'].values)
+    times = np.asarray(times)
 
     if not (
         len(lons) == len(lats) == len(times)
