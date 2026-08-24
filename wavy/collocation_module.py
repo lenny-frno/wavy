@@ -961,6 +961,54 @@ class collocation_class(qls):
             int(np.isnan(dist).sum()))
         return new
 
+    def add_wave_regime(
+    self,
+    spectral_file,
+    **kwargs,
+    ):
+        """
+        Add wave regime derived from an unstructured spectral file.
+        """
+        from wavy.spectra_module import (
+            read_spectral_file,
+            collocate_spectra,
+        )
+
+        new = deepcopy(self)
+
+        ds = read_spectral_file(spectral_file)
+
+        result = collocate_spectra(
+            ds,
+            lons=new.vars["lons"].values,
+            lats=new.vars["lats"].values,
+            times=new.vars["time"].values,
+            **kwargs,
+        )
+
+        new.vars = new.vars.assign(
+            {
+                "wave_regime": (
+                    ("time",),
+                    result["wave_regime"],
+                ),
+                "spectral_point_index": (
+                    ("time",),
+                    result["spectral_point_index"],
+                ),
+                "spectral_distance": (
+                    ("time",),
+                    result["spectral_distance_m"],
+                ),
+                "spectral_time_difference": (
+                    ("time",),
+                    result["spectral_time_difference_s"],
+                ),
+            }
+        )
+
+        return new
+
 
 def validate_collocated_values(dtime, obs, mods, **kwargs):
     target_t, sdate, edate, twin = None, None, None, None
