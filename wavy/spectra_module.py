@@ -122,13 +122,13 @@ def read_spectral_file(filename, **kwargs):
 
     spec = ds["efth"]
 
-    if "freq" not in spec.dims:
+    if "frequency" not in spec.dims:
         raise ValueError(
             "Spectral energy variable 'efth' has no 'freq' dimension. "
             f"Dimensions are: {spec.dims}"
         )
 
-    if "dir" not in spec.dims:
+    if "direction" not in spec.dims:
         raise ValueError(
             "Spectral energy variable 'efth' has no 'dir' dimension. "
             f"Dimensions are: {spec.dims}"
@@ -136,16 +136,15 @@ def read_spectral_file(filename, **kwargs):
 
     # wavespectra expects frequency and direction to be available
     # as coordinates on the spectral DataArray.
-    if "freq" not in spec.coords:
+    if "frequency" not in spec.coords:
         raise ValueError(
-            "The 'efth' DataArray has a freq dimension but no freq "
+            "The 'efth' DataArray has a frequency dimension but no frequency coordinate."
             "coordinate."
         )
 
-    if "dir" not in spec.coords:
+    if "direction" not in spec.coords:
         raise ValueError(
-            "The 'efth' DataArray has a dir dimension but no dir "
-            "coordinate."
+            "The 'efth' DataArray has a direction dimension but no direction coordinate."
         )
 
     logger.debug(
