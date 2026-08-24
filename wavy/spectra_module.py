@@ -85,7 +85,7 @@ def read_spectral_file(filename, **kwargs):
     Read a spectral NetCDF file using wavespectra.
 
     The dataset is normalized to the wavespectra conventions:
-        efth(time, site, freq, dir)
+        efth(time, site, frequency, direction)
 
     The returned object is cached because the same spectral file is
     normally queried many times during collocation.
@@ -96,8 +96,8 @@ def read_spectral_file(filename, **kwargs):
     logger.debug("Reading spectral file: %s", filename)
 
     read_kwargs = {
-        "freqname": kwargs.get("freq_name", "freq"),
-        "dirname": kwargs.get("dir_name", "dir"),
+        "freqname": kwargs.get("freq_name", "frequency"),
+        "dirname": kwargs.get("dir_name", "direction"),
         "sitename": kwargs.get("point_dim", "site"),
         "specname": kwargs.get("spec_name", "efth"),
         "lonname": kwargs.get("lon_name", "lon"),
@@ -124,13 +124,13 @@ def read_spectral_file(filename, **kwargs):
 
     if "frequency" not in spec.dims:
         raise ValueError(
-            "Spectral energy variable 'efth' has no 'freq' dimension. "
+            "Spectral energy variable 'efth' has no 'frequency' dimension. "
             f"Dimensions are: {spec.dims}"
         )
 
     if "direction" not in spec.dims:
         raise ValueError(
-            "Spectral energy variable 'efth' has no 'dir' dimension. "
+            "Spectral energy variable 'efth' has no 'direction' dimension. "
             f"Dimensions are: {spec.dims}"
         )
 
@@ -395,20 +395,20 @@ def extract_point_spectrum(
 
     efth = spectrum["efth"]
 
-    if "freq" not in efth.dims or "dir" not in efth.dims:
+    if "frequency" not in efth.dims or "direction" not in efth.dims:
         raise ValueError(
             "Extracted spectrum does not have the expected "
-            f"(freq, dir) dimensions. Got {efth.dims}"
+            f"(frequency, direction) dimensions. Got {efth.dims}"
         )
 
-    if "freq" not in efth.coords:
+    if "frequency" not in efth.coords:
         raise ValueError(
-            "Extracted spectrum has no 'freq' coordinate."
+            "Extracted spectrum has no 'frequency' coordinate."
         )
 
-    if "dir" not in efth.coords:
+    if "direction" not in efth.coords:
         raise ValueError(
-            "Extracted spectrum has no 'dir' coordinate."
+            "Extracted spectrum has no 'direction' coordinate."
         )
 
     return spectrum
@@ -446,14 +446,14 @@ def partition_spectrum(
 
     efth = spectrum["efth"]
 
-    if "freq" not in efth.dims:
+    if "frequency" not in efth.dims:
         raise ValueError(
-            f"'efth' must have a freq dimension, got {efth.dims}"
+            f"'efth' must have a frequency dimension, got {efth.dims}"
         )
 
-    if "dir" not in efth.dims:
+    if "direction" not in efth.dims:
         raise ValueError(
-            f"'efth' must have a dir dimension, got {efth.dims}"
+            f"'efth' must have a direction dimension, got {efth.dims}"
         )
 
     # Access the wavespectra partition namespace.
