@@ -78,41 +78,176 @@ def _datetime_difference_seconds(times, target):
 # ---------------------------------------------------------------------#
 # Spectral file reader
 # ---------------------------------------------------------------------#
+def _resolve_spectral_name(
+    ds,
+    requested,
+    candidates,
+    kind,
+):
+    """
+    Resolve a spectral variable/dimension name.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        Dataset opened from the spectral file.
+    requested : str, optional
+        Explicit name supplied by the user.
+    candidates : list[str]
+        Names to try if no explicit name is supplied.
+    kind : str
+        Human-readable description used in error messages.
+
+    Returns
+    -------
+    str
+        Resolved name.
+    """
+    if requested is not None:
+        if requested in ds.dims or requested in ds.coords or requested in ds:
+            return requested
+
+        raise KeyError(
+            f"Specified {kind} name '{requested}' was not found. "
+            f"Available dimensions: {list(ds.dims)}; "
+            f"coordinates: {list(ds.coords)}; "
+            f"variables: {list(ds.data_vars)}"
+        )
+
+    for candidate in candidates:
+        if (
+            candidate in ds.dims
+            or candidate in ds.coords
+            or candidate in ds
+        ):
+            return candidate
+
+    raise KeyError(
+        f"Could not identify spectral {kind}. "
+        f"Tried: {candidates}. "
+        f"Available dimensions: {list(ds.dims)}; "
+        f"coordinates: {list(ds.coords)}; "
+        f"variables: {list(ds.data_vars)}"
+    )
 
 @lru_cache(maxsize=8)
 def read_spectral_file(filename, **kwargs):
     """
     Read a spectral NetCDF file using wavespectra.
 
-    The dataset is normalized to the wavespectra conventions:
-        efth(time, site, frequency, direction)
+    The spectral frequency and direction names are automatically
+    resolved. For example:
 
-    The returned object is cached because the same spectral file is
-    normally queried many times during collocation.
+        frequency: ``freq`` or ``frequency``
+        direction: ``dir`` or ``direction``
+
+    Explicit names can be supplied through ``freq_name`` and
+    ``dir_name``.
+
+    The dataset is normalized by wavespectra to use:
+
+        frequency
+        direction
+        site
+        time
+        efth
     """
     _check_wavespectra()
 
     logger = logging.getLogger(__name__)
     logger.debug("Reading spectral file: %s", filename)
 
+    # Open only the metadata first so that we can discover the actual
+    # NetCDF dimension/coordinate names before calling wavespectra.
+    import xarray as xr
+
+    with xr.open_dataset(filename) as raw_ds:
+
+        freq_name = _resolve_spectral_name(
+            raw_ds,
+            requested=kwargs.get("freq_name"),
+            candidates=["freq", "frequency"],
+            kind="frequency",
+        )
+
+        dir_name = _resolve_spectral_name(
+            raw_ds,
+            requested=kwargs.get("dir_name"),
+            candidates=["dir", "direction"],
+            kind="direction",
+        )
+
+        # The remaining names can also be resolved in the same way.
+        point_dim = _resolve_spectral_name(
+            raw_ds,
+            requested=kwargs.get("point_dim"),
+            candidates=[
+                "site",
+                "station",
+                "point",
+                "node",
+                "location",
+            ],
+            kind="spectral point dimension",
+        )
+
+        lon_name = _resolve_spectral_name(
+            raw_ds,
+            requested=kwargs.get("lon_name"),
+            candidates=["lon", "longitude", "lons"],
+            kind="longitude",
+        )
+
+        lat_name = _resolve_spectral_name(
+            raw_ds,
+            requested=kwargs.get("lat_name"),
+            candidates=["lat", "latitude", "lats"],
+            kind="latitude",
+        )
+
+        time_name = _resolve_spectral_name(
+            raw_ds,
+            requested=kwargs.get("time_name"),
+            candidates=["time", "datetime", "valid_time"],
+            kind="time",
+        )
+
+        spec_name = _resolve_spectral_name(
+            raw_ds,
+            requested=kwargs.get("spec_name"),
+            candidates=["efth"],
+            kind="spectral energy variable",
+        )
+
+    logger.debug(
+        "Resolved spectral names: "
+        "freq=%s, dir=%s, point=%s, lon=%s, lat=%s, time=%s, spec=%s",
+        freq_name,
+        dir_name,
+        point_dim,
+        lon_name,
+        lat_name,
+        time_name,
+        spec_name,
+    )
+
     read_kwargs = {
-        "freqname": kwargs.get("freq_name", "frequency"),
-        "dirname": kwargs.get("dir_name", "direction"),
-        "sitename": kwargs.get("point_dim", "site"),
-        "specname": kwargs.get("spec_name", "efth"),
-        "lonname": kwargs.get("lon_name", "lon"),
-        "latname": kwargs.get("lat_name", "lat"),
-        "timename": kwargs.get("time_name", "time"),
+        "freqname": freq_name,
+        "dirname": dir_name,
+        "sitename": point_dim,
+        "specname": spec_name,
+        "lonname": lon_name,
+        "latname": lat_name,
+        "timename": time_name,
     }
 
-    # Don't pass arbitrary collocation kwargs to read_netcdf.
     if kwargs.get("chunks") is not None:
         read_kwargs["chunks"] = kwargs["chunks"]
 
     ds = read_netcdf(filename, **read_kwargs)
 
     # ------------------------------------------------------------------
-    # Make sure the spectral dimensions actually exist.
+    # wavespectra should now have normalized these names.
     # ------------------------------------------------------------------
     if "efth" not in ds:
         raise KeyError(
@@ -121,30 +256,31 @@ def read_spectral_file(filename, **kwargs):
         )
 
     spec = ds["efth"]
-    print(spec)
+
     if "frequency" not in spec.dims:
         raise ValueError(
-            "Spectral energy variable 'efth' has no 'frequency' dimension. "
+            "Spectral energy variable 'efth' has no 'frequency' "
+            f"dimension after wavespectra normalization. "
             f"Dimensions are: {spec.dims}"
         )
 
     if "direction" not in spec.dims:
         raise ValueError(
-            "Spectral energy variable 'efth' has no 'direction' dimension. "
+            "Spectral energy variable 'efth' has no 'direction' "
+            f"dimension after wavespectra normalization. "
             f"Dimensions are: {spec.dims}"
         )
 
-    # wavespectra expects frequency and direction to be available
-    # as coordinates on the spectral DataArray.
     if "frequency" not in spec.coords:
         raise ValueError(
-            "The 'efth' DataArray has a frequency dimension but no frequency coordinate."
-            "coordinate."
+            "The 'efth' DataArray has a frequency dimension but no "
+            "frequency coordinate."
         )
 
     if "direction" not in spec.coords:
         raise ValueError(
-            "The 'efth' DataArray has a direction dimension but no direction coordinate."
+            "The 'efth' DataArray has a direction dimension but no "
+            "direction coordinate."
         )
 
     logger.debug(
