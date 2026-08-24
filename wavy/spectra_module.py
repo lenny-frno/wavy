@@ -132,32 +132,13 @@ def _resolve_spectral_name(
 
 def _normalize_spectral_dataset(ds):
     """
-    Normalize a spectral Dataset to the internal names expected by wavy.
+    Normalize environmental variable names to those expected by wavy.
 
-    Supported input names include:
-
-    frequency:
-        freq, frequency
-
-    direction:
-        dir, direction
-
-    wind speed:
-        wspd, wnd
-
-    wind direction:
-        wdir, wnddir
+    wavespectra internally expects spectral dimensions:
+        freq, dir
     """
     rename = {}
 
-    # Spectral dimensions
-    if "freq" in ds.dims and "frequency" not in ds.dims:
-        rename["freq"] = "frequency"
-
-    if "dir" in ds.dims and "direction" not in ds.dims:
-        rename["dir"] = "direction"
-
-    # Environmental variables
     if "wnd" in ds.data_vars and "wspd" not in ds.data_vars:
         rename["wnd"] = "wspd"
 
@@ -297,30 +278,30 @@ def read_spectral_file(filename, **kwargs):
 
     spec = ds["efth"]
 
-    if "frequency" not in spec.dims:
+    if "freq" not in spec.dims:
         raise ValueError(
-            "Spectral energy variable 'efth' has no 'frequency' "
+            "Spectral energy variable 'efth' has no 'freq' "
             f"dimension after wavespectra normalization. "
             f"Dimensions are: {spec.dims}"
         )
 
-    if "direction" not in spec.dims:
+    if "dir" not in spec.dims:
         raise ValueError(
-            "Spectral energy variable 'efth' has no 'direction' "
+            "Spectral energy variable 'efth' has no 'dir' "
             f"dimension after wavespectra normalization. "
             f"Dimensions are: {spec.dims}"
         )
 
-    if "frequency" not in spec.coords:
+    if "freq" not in spec.coords:
         raise ValueError(
-            "The 'efth' DataArray has a frequency dimension but no "
-            "frequency coordinate."
+            "The 'efth' DataArray has a freq dimension but no "
+            "freq coordinate."
         )
 
-    if "direction" not in spec.coords:
+    if "dir" not in spec.coords:
         raise ValueError(
-            "The 'efth' DataArray has a direction dimension but no "
-            "direction coordinate."
+            "The 'efth' DataArray has a dir dimension but no "
+            "dir coordinate."
         )
 
     logger.debug(
@@ -571,20 +552,20 @@ def extract_point_spectrum(
 
     efth = spectrum["efth"]
 
-    if "frequency" not in efth.dims or "direction" not in efth.dims:
+    if "freq" not in efth.dims or "dir" not in efth.dims:
         raise ValueError(
             "Extracted spectrum does not have the expected "
-            f"(frequency, direction) dimensions. Got {efth.dims}"
+            f"(freq, dir) dimensions. Got {efth.dims}"
         )
 
-    if "frequency" not in efth.coords:
+    if "freq" not in efth.coords:
         raise ValueError(
-            "Extracted spectrum has no 'frequency' coordinate."
+            "Extracted spectrum has no 'freq' coordinate."
         )
 
-    if "direction" not in efth.coords:
+    if "dir" not in efth.coords:
         raise ValueError(
-            "Extracted spectrum has no 'direction' coordinate."
+            "Extracted spectrum has no 'dir' coordinate."
         )
 
     return spectrum
@@ -622,14 +603,14 @@ def partition_spectrum(
 
     efth = spectrum["efth"]
 
-    if "frequency" not in efth.dims:
+    if "freq" not in efth.dims:
         raise ValueError(
-            f"'efth' must have a frequency dimension, got {efth.dims}"
+            f"'efth' must have a freq dimension, got {efth.dims}"
         )
 
-    if "direction" not in efth.dims:
+    if "dir" not in efth.dims:
         raise ValueError(
-            f"'efth' must have a direction dimension, got {efth.dims}"
+            f"'efth' must have a dir dimension, got {efth.dims}"
         )
 
     # Access the wavespectra partition namespace.
