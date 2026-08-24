@@ -130,6 +130,28 @@ def _resolve_spectral_name(
         f"variables: {list(ds.data_vars)}"
     )
 
+def _normalize_spectral_dimensions(ds):
+    """
+    Rename spectral dimensions/coordinates to the canonical names
+    expected by the rest of this module.
+
+    Accepted input names:
+        frequency: freq, frequency
+        direction: dir, direction
+    """
+    rename = {}
+
+    if "freq" in ds.dims and "frequency" not in ds.dims:
+        rename["freq"] = "frequency"
+
+    if "dir" in ds.dims and "direction" not in ds.dims:
+        rename["dir"] = "direction"
+
+    if rename:
+        ds = ds.rename(rename)
+
+    return ds
+
 @lru_cache(maxsize=8)
 def read_spectral_file(filename, **kwargs):
     """
@@ -245,6 +267,7 @@ def read_spectral_file(filename, **kwargs):
         read_kwargs["chunks"] = kwargs["chunks"]
 
     ds = read_netcdf(filename, **read_kwargs)
+    ds = _normalize_spectral_dimensions(ds)
 
     # ------------------------------------------------------------------
     # wavespectra should now have normalized these names.
