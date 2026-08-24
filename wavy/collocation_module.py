@@ -842,6 +842,56 @@ class collocation_class(qls):
         )
         return validation_dict
 
+    def add_dist_to_ice_edge(self, **kwargs):
+        """
+        Adds 'dist_to_ice_edge' (meters) to self.vars: the distance from
+        each collocated observation point to the nearest ice edge in the
+        model's SIC field, computed once per unique model_time to avoid
+        redundant fetches.
+
+        kwargs:
+            ice_varalias (str): varalias for ice concentration in
+                                model_cfg.yaml's vardef (default 'SIC')
+            ice_threshold (float): concentration defining the edge
+                                (default 0.15)
+        """
+        from wavy.ice_module import get_dist_to_ice_edge
+
+        logger = logging.getLogger(__name__)
+        log_level = str(kwargs.get('logging', 'WARNING').upper())
+        logger.setLevel(getattr(logging, log_level, logging.WARNING))
+
+        new = deepcopy(self)
+        varalias = kwargs.get('ice_varalias', 'SIC')
+        threshold = kwargs.get('ice_threshold', 0.15)
+
+        model_times = pd.to_datetime(new.vars['model_time'].values)
+        unique_times = pd.unique(model_times)
+
+        dist = np.full(len(model_times), np.nan)
+
+        print('Computing distance to ice edge for',
+            len(unique_times), 'unique model time steps')
+
+        for t in unique_times:
+            idx = np.where(model_times == t)[0]
+            t_dt = pd.Timestamp(t).to_pydatetime()
+            pts_lons = new.vars['obs_lons'].values[idx]
+            pts_lats = new.vars['obs_lats'].values[idx]
+            d = get_dist_to_ice_edge(
+                pts_lons, pts_lats, t_dt, new.model,
+                leadtime=new.leadtime, name=new.name,
+                varalias=varalias, threshold=threshold, **kwargs)
+            dist[idx] = d
+
+        new.vars = new.vars.assign({"dist_to_ice_edge": (("time"), dist)})
+        if "dist_to_ice_edge" in variable_def:
+            new.vars["dist_to_ice_edge"].attrs = variable_def["dist_to_ice_edge"]
+
+        print(" Number of points without ice edge distance:",
+            int(np.isnan(dist).sum()))
+        return new
+
 
 def validate_collocated_values(dtime, obs, mods, **kwargs):
     target_t, sdate, edate, twin = None, None, None, None

@@ -155,3 +155,70 @@ def test_collocate_observations(test_data):
     print(len(sco_colloc.vars.keys()))
     assert len(sco_colloc.vars.keys()) == 4
     assert len(sco_colloc.vars.time.values) > 0
+
+# def test_cco_add_dist_to_ice_edge():
+#     """
+#     Checks that add_dist_to_ice_edge appends a well-formed
+#     'dist_to_ice_edge' variable to an existing collocation_class
+#     object, without altering the number of collocated points.
+#     """
+#     import numpy as np
+ 
+#     # winter dates/high-latitude points, more likely to sit near
+#     # or within the marginal ice zone than the poi_collocation
+#     # test above, but the assertions below don't depend on ice
+#     # actually being present at these particular points/dates
+#     dt = ["2023-2-1", "2023-2-2", "2023-2-3"]
+#     lats = [70.5, 74.0, 78.2]
+#     lons = [20.0, 15.0, 10.0]
+#     poi_dict = {"time": dt, "lons": lons, "lats": lats}
+ 
+#     pco = pc(poi_dict)
+ 
+#     cco = cc(oco=pco, model="ww3_4km", leadtime="best").populate()
+#     n_points_before = len(cco.vars.time)
+#     n_keys_before = len(cco.vars.keys())
+ 
+#     cco = cco.add_dist_to_ice_edge()
+ 
+#     assert "dist_to_ice_edge" in cco.vars.keys()
+#     assert len(cco.vars.keys()) == n_keys_before + 1
+#     # number of collocated points must not change
+#     assert len(cco.vars.time) == n_points_before
+ 
+#     dist = cco.vars["dist_to_ice_edge"].values
+#     assert len(dist) == n_points_before
+#     # every entry is either NaN (no ice edge found for that
+#     # timestep) or a finite, non-negative distance in meters
+#     for d in dist:
+#         assert np.isnan(d) or d >= 0.0
+ 
+ 
+# def test_cco_add_dist_to_ice_edge_options_do_not_change_length():
+#     """
+#     Checks that passing ice_threshold / ice-mask-cleanup kwargs
+#     through add_dist_to_ice_edge doesn't break the call chain and
+#     still yields one value per collocated point.
+#     """
+#     import numpy as np
+ 
+#     dt = ["2023-2-1", "2023-2-2"]
+#     lats = [74.0, 78.2]
+#     lons = [15.0, 10.0]
+#     poi_dict = {"time": dt, "lons": lons, "lats": lats}
+ 
+#     pco = pc(poi_dict)
+#     cco = cc(oco=pco, model="ww3_4km", leadtime="best").populate()
+#     n_points_before = len(cco.vars.time)
+ 
+#     cco = cco.add_dist_to_ice_edge(
+#         ice_threshold=0.15,
+#         min_feature_cells=5,
+#         fill_enclosed_water=True,
+#     )
+ 
+#     assert "dist_to_ice_edge" in cco.vars.keys()
+#     dist = cco.vars["dist_to_ice_edge"].values
+#     assert len(dist) == n_points_before
+#     for d in dist:
+#         assert np.isnan(d) or d >= 0.0
