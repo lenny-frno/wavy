@@ -961,50 +961,86 @@ class collocation_class(qls):
             int(np.isnan(dist).sum()))
         return new
 
-    def add_wave_regime(
-    self,
-    spectral_file,
-    **kwargs,
-    ):
+    def add_wave_regime(self, spectral_file, **kwargs):
         """
-        Add wave regime derived from an unstructured spectral file.
+        Adds 'wave_regime' to self.vars by collocating observations with
+        unstructured wave spectra.
+
+        Spectral collocation is performed once per unique model time
+        to avoid repeatedly accessing the same spectral time/file.
+
+        kwargs:
+            point_dim (str): dimension containing spectral points
+            time_name (str): spectral time coordinate
+            lon_name (str): spectral longitude coordinate
+            lat_name (str): spectral latitude coordinate
+            partition_method (str): wavespectra partitioning method
+            partition_kwargs (dict): arguments for spectral partitioning
+            regime_kwargs (dict): arguments for wave-regime classification
+            max_time_difference (float): maximum allowed time difference [s]
         """
         from wavy.spectra_module import (
             read_spectral_file,
             collocate_spectra,
         )
 
+        logger = logging.getLogger(__name__)
+        log_level = str(kwargs.get('logging', 'WARNING').upper())
+        logger.setLevel(getattr(logging, log_level, logging.WARNING))
+
         new = deepcopy(self)
 
+        model_times = pd.to_datetime(new.vars['model_time'].values)
+        unique_times = pd.unique(model_times)
+
+        wave_regime = np.full(len(model_times), np.nan)
+
+        logger.info(
+            'Computing wave regime for %d unique model time steps',
+            len(unique_times)
+        )
+
+        # Read the spectral file once.
         ds = read_spectral_file(spectral_file)
 
-        result = collocate_spectra(
-            ds,
-            lons=new.vars["lons"].values,
-            lats=new.vars["lats"].values,
-            times=new.vars["time"].values,
-            **kwargs,
-        )
+        for t in unique_times:
+            idx = np.where(model_times == t)[0]
+
+            t_dt = pd.Timestamp(t).to_pydatetime()
+
+            pts_lons = new.vars['obs_lons'].values[idx]
+            pts_lats = new.vars['obs_lats'].values[idx]
+            pts_times = np.full(
+                len(idx),
+                t_dt,
+                dtype='datetime64[ns]'
+            )
+
+            result = collocate_spectra(
+                ds,
+                lons=pts_lons,
+                lats=pts_lats,
+                times=pts_times,
+                **kwargs,
+            )
+
+            wave_regime[idx] = result['wave_regime']
 
         new.vars = new.vars.assign(
             {
-                "wave_regime": (
-                    ("time",),
-                    result["wave_regime"],
-                ),
-                "spectral_point_index": (
-                    ("time",),
-                    result["spectral_point_index"],
-                ),
-                "spectral_distance": (
-                    ("time",),
-                    result["spectral_distance_m"],
-                ),
-                "spectral_time_difference": (
-                    ("time",),
-                    result["spectral_time_difference_s"],
-                ),
+                'wave_regime': (
+                    ('time'),
+                    wave_regime
+                )
             }
+        )
+
+        if 'wave_regime' in variable_def:
+            new.vars['wave_regime'].attrs = variable_def['wave_regime']
+
+        print(
+            ' Number of points without wave regime:',
+            int(np.isnan(wave_regime).sum())
         )
 
         return new
