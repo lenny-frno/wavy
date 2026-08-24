@@ -141,12 +141,24 @@ def get_spectral_coordinates(ds, lon_name=None, lat_name=None):
             "Specify lon_name and lat_name explicitly."
         )
 
-    lons = np.asarray(ds[lon_name].values).squeeze()
-    lats = np.asarray(ds[lat_name].values).squeeze()
+    # Spectral stations are stationary. If coordinates have a time
+    # dimension, use the first time step and remove that dimension.
+    lon = ds[lon_name]
+    lat = ds[lat_name]
+
+    if "time" in lon.dims:
+        lon = lon.isel(time=0, drop=True)
+
+    if "time" in lat.dims:
+        lat = lat.isel(time=0, drop=True)
+
+    lons = np.asarray(lon.values).squeeze()
+    lats = np.asarray(lat.values).squeeze()
 
     if lons.ndim != 1 or lats.ndim != 1:
         raise ValueError(
-            "Spectral point coordinates must be one-dimensional."
+            "Spectral point coordinates must be one-dimensional after "
+            "removing the time dimension."
         )
 
     if len(lons) != len(lats):
@@ -571,7 +583,9 @@ def collocate_spectra(
 
     lons = np.asarray(lons)
     lats = np.asarray(lats)
-    times = np.asarray(times)
+    times = np.asarray(times)# Observation times used for spectral collocation
+    obs_time = pd.to_datetime(new.vars['obs_time'].values)
+    unique_times = pd.unique(new.vars['model_time'].values)
 
     if not (
         len(lons) == len(lats) == len(times)
