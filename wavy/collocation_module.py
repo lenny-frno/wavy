@@ -842,9 +842,9 @@ class collocation_class(qls):
         )
         return validation_dict
 
-    def add_dist_to_ice_edge(self, **kwargs):
+    def add_dist_to_ice(self, **kwargs):
         """
-        Adds 'dist_to_ice_edge' (meters) to self.vars: the distance from
+        Adds 'dist_to_ice' (meters) to self.vars: the distance from
         each collocated observation point to the nearest ice edge in the
         model's SIC field, computed once per unique model_time to avoid
         redundant fetches.
@@ -853,9 +853,9 @@ class collocation_class(qls):
             ice_varalias (str): varalias for ice concentration in
                                 model_cfg.yaml's vardef (default 'SIC')
             ice_threshold (float): concentration defining the edge
-                                (default 0.15)
+                                (default 0.5)
         """
-        from wavy.ice_module import get_dist_to_ice_edge
+        from wavy.ice_module import get_dist_to_ice
 
         logger = logging.getLogger(__name__)
         log_level = str(kwargs.get('logging', 'WARNING').upper())
@@ -863,7 +863,7 @@ class collocation_class(qls):
 
         new = deepcopy(self)
         varalias = kwargs.get('ice_varalias', 'SIC')
-        threshold = kwargs.get('ice_threshold', 0.15)
+        threshold = kwargs.get('ice_threshold', 0.5)
 
         model_times = pd.to_datetime(new.vars['model_time'].values)
         unique_times = pd.unique(model_times)
@@ -878,17 +878,17 @@ class collocation_class(qls):
             t_dt = pd.Timestamp(t).to_pydatetime()
             pts_lons = new.vars['obs_lons'].values[idx]
             pts_lats = new.vars['obs_lats'].values[idx]
-            d = get_dist_to_ice_edge(
+            d = get_dist_to_ice(
                 pts_lons, pts_lats, t_dt, new.model,
                 leadtime=new.leadtime, name=new.name,
                 varalias=varalias, threshold=threshold, **kwargs)
             dist[idx] = d
 
-        new.vars = new.vars.assign({"dist_to_ice_edge": (("time"), dist)})
-        if "dist_to_ice_edge" in variable_def:
-            new.vars["dist_to_ice_edge"].attrs = variable_def["dist_to_ice_edge"]
+        new.vars = new.vars.assign({"dist_to_ice": (("time"), dist)})
+        if "dist_to_ice" in variable_def:
+            new.vars["dist_to_ice"].attrs = variable_def["dist_to_ice"]
 
-        print(" Number of points without ice edge distance:",
+        print(" Number of points without ice distance:",
             int(np.isnan(dist).sum()))
         return new
 
