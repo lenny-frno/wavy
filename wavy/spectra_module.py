@@ -130,22 +130,39 @@ def _resolve_spectral_name(
         f"variables: {list(ds.data_vars)}"
     )
 
-def _normalize_spectral_dimensions(ds):
+def _normalize_spectral_dataset(ds):
     """
-    Rename spectral dimensions/coordinates to the canonical names
-    expected by the rest of this module.
+    Normalize a spectral Dataset to the internal names expected by wavy.
 
-    Accepted input names:
-        frequency: freq, frequency
-        direction: dir, direction
+    Supported input names include:
+
+    frequency:
+        freq, frequency
+
+    direction:
+        dir, direction
+
+    wind speed:
+        wspd, wnd
+
+    wind direction:
+        wdir, wnddir
     """
     rename = {}
 
+    # Spectral dimensions
     if "freq" in ds.dims and "frequency" not in ds.dims:
         rename["freq"] = "frequency"
 
     if "dir" in ds.dims and "direction" not in ds.dims:
         rename["dir"] = "direction"
+
+    # Environmental variables
+    if "wnd" in ds.data_vars and "wspd" not in ds.data_vars:
+        rename["wnd"] = "wspd"
+
+    if "wnddir" in ds.data_vars and "wdir" not in ds.data_vars:
+        rename["wnddir"] = "wdir"
 
     if rename:
         ds = ds.rename(rename)
@@ -267,7 +284,7 @@ def read_spectral_file(filename, **kwargs):
         read_kwargs["chunks"] = kwargs["chunks"]
 
     ds = read_netcdf(filename, **read_kwargs)
-    ds = _normalize_spectral_dimensions(ds)
+    ds = _normalize_spectral_dataset(ds)
 
     # ------------------------------------------------------------------
     # wavespectra should now have normalized these names.
