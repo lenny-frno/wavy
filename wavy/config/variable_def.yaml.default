@@ -205,6 +205,13 @@ dist_to_coast:
     units: m
     _FillValue: -999.9
 
+dist_to_ice_edge:
+    standard_name: distance_to_ice_edge
+    long_name: 'distance between footprint and nearest ice edge'
+    units: m
+    valid_range: [0, 10000000]
+    _FillValue: -999.9
+    
 hmax:
     standard_name: sea_surface_wave_maximum_height
     long_name: 'expected maximum wave height'

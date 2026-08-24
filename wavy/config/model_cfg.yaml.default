@@ -101,6 +101,7 @@ ww3_4km:
         lats: latitude
         U: ff
         hmaxt: hmaxe
+        SIC: ice
     coords:
     # optional, info that can be used by class functions
     misc:
