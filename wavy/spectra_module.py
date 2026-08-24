@@ -121,7 +121,7 @@ def read_spectral_file(filename, **kwargs):
         )
 
     spec = ds["efth"]
-
+    print(spec)
     if "frequency" not in spec.dims:
         raise ValueError(
             "Spectral energy variable 'efth' has no 'frequency' dimension. "
