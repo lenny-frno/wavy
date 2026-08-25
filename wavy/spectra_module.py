@@ -20,6 +20,8 @@ the returned values to its xarray Dataset.
 import logging
 from copy import deepcopy
 from functools import lru_cache
+from time import perf_counter
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -335,6 +337,111 @@ class SpectralPointIndex:
 
         return int(index[0, 0]), float(distance[0, 0] * EARTH_RADIUS_M)
 
+    def query_many(self, lons, lats):
+        """
+        Find nearest spectral points for many locations at once.
+
+        Parameters
+        ----------
+        lons, lats : array-like
+
+        Returns
+        -------
+        indices : numpy.ndarray
+        distances_m : numpy.ndarray
+        """
+        query = np.deg2rad(
+            np.column_stack((np.asarray(lats, dtype=float), np.asarray(lons, dtype=float)))
+        )
+
+        distance, index = self.tree.query(query, k=1)
+
+        return index[:, 0].astype(int), distance[:, 0] * EARTH_RADIUS_M
+
+
+def _resolve_point_dim(ds, point_dim=None):
+    """Resolve spectral point dimension name once."""
+    if point_dim is not None:
+        return point_dim
+
+    for candidate in [
+        "site",
+        "station",
+        "point",
+        "node",
+        "location",
+    ]:
+        if candidate in ds.dims:
+            return candidate
+
+    raise KeyError(
+        "Could not identify spectral point dimension. "
+        "Specify point_dim explicitly."
+    )
+
+
+def _resolve_time_name(ds, time_name=None):
+    """Resolve spectral time coordinate/dimension name once."""
+    if time_name is not None:
+        return time_name
+
+    for candidate in ["time", "datetime", "valid_time"]:
+        if candidate in ds.coords:
+            return candidate
+
+    for candidate in ["time", "datetime", "valid_time"]:
+        if candidate in ds.dims:
+            return candidate
+
+    raise KeyError(
+        "Could not identify spectral time coordinate. "
+        "Specify time_name explicitly."
+    )
+
+
+def _nearest_time_lookup(spectral_times, target_times):
+    """
+    Vectorized nearest-neighbour lookup for datetime64[ns] arrays.
+
+    Parameters
+    ----------
+    spectral_times : numpy.ndarray
+        Available spectral times, datetime64[ns].
+    target_times : numpy.ndarray
+        Target times, datetime64[ns].
+
+    Returns
+    -------
+    indices : numpy.ndarray
+    matched_times : numpy.ndarray
+    differences_seconds : numpy.ndarray
+    """
+    spectral_times = np.asarray(spectral_times).astype("datetime64[ns]")
+    target_times = np.asarray(target_times).astype("datetime64[ns]")
+
+    if spectral_times.size == 0:
+        raise ValueError("Spectral Dataset contains no time values.")
+
+    order = np.argsort(spectral_times)
+    sorted_times = spectral_times[order]
+
+    right = np.searchsorted(sorted_times, target_times, side="left")
+    right = np.clip(right, 0, len(sorted_times) - 1)
+    left = np.clip(right - 1, 0, len(sorted_times) - 1)
+
+    right_diff = np.abs(sorted_times[right] - target_times)
+    left_diff = np.abs(sorted_times[left] - target_times)
+
+    choose_left = left_diff <= right_diff
+    sorted_indices = np.where(choose_left, left, right)
+
+    indices = order[sorted_indices].astype(int)
+    matched_times = spectral_times[indices]
+    differences = np.abs(matched_times - target_times)
+    differences_seconds = differences.astype("timedelta64[s]").astype(float)
+
+    return indices, matched_times, differences_seconds
+
 
 # ---------------------------------------------------------------------#
 # Spectral time selection
@@ -351,16 +458,12 @@ def find_nearest_spectral_time(ds, target_time, time_name=None):
     difference_seconds : float
     """
     times = get_spectral_times(ds, time_name=time_name)
-
-    differences = _datetime_difference_seconds(times, target_time)
-
-    index = int(np.argmin(differences))
-
-    return (
-        index,
-        times[index],
-        float(differences[index])
+    indices, matched_times, differences = _nearest_time_lookup(
+        times,
+        np.asarray([target_time]),
     )
+
+    return int(indices[0]), matched_times[0], float(differences[0])
 
 
 # ---------------------------------------------------------------------#
@@ -381,34 +484,8 @@ def extract_point_spectrum(
         freq, dir
     """
 
-    if point_dim is None:
-        for candidate in [
-            "site",
-            "station",
-            "point",
-            "node",
-            "location",
-        ]:
-            if candidate in ds.dims:
-                point_dim = candidate
-                break
-
-    if point_dim is None:
-        raise KeyError(
-            "Could not identify spectral point dimension. "
-            "Specify point_dim explicitly."
-        )
-
-    if time_name is None:
-        for candidate in ["time", "datetime", "valid_time"]:
-            if candidate in ds.dims:
-                time_name = candidate
-                break
-
-    if time_name is None:
-        raise KeyError(
-            "Could not identify spectral time dimension."
-        )
+    point_dim = _resolve_point_dim(ds, point_dim=point_dim)
+    time_name = _resolve_time_name(ds, time_name=time_name)
 
     # Select the spectrum.
     spectrum = ds.isel(
@@ -784,12 +861,40 @@ def collocate_spectra(
     -------
     dict of numpy.ndarray
         One-dimensional collocation results.
+
+    Notes
+    -----
+    Optional keyword:
+        return_profiling : bool
+            If True, include a profiling dictionary under key
+            "profiling" in the returned result.
     """
     logger = logging.getLogger(__name__)
 
+    kwargs = dict(kwargs)
+    allowed_kwargs = {
+        "lon_name",
+        "lat_name",
+        "time_name",
+        "point_dim",
+        "max_time_difference",
+        "partition_method",
+        "partition_kwargs",
+        "regime_kwargs",
+        "return_profiling",
+    }
+    unexpected = set(kwargs) - allowed_kwargs
+    if unexpected:
+        raise TypeError(
+            "collocate_spectra got unsupported keyword arguments: "
+            f"{sorted(unexpected)}"
+        )
+
+    return_profiling = bool(kwargs.pop("return_profiling", False))
+
     lons = np.asarray(lons)
     lats = np.asarray(lats)
-    times = np.asarray(times)
+    times = np.asarray(times).astype("datetime64[ns]")
 
     if not (
         len(lons) == len(lats) == len(times)
@@ -798,10 +903,22 @@ def collocate_spectra(
             "lons, lats and times must have identical lengths."
         )
 
+    t0 = perf_counter()
+
+    lon_name = kwargs.get("lon_name")
+    lat_name = kwargs.get("lat_name")
+    point_dim = _resolve_point_dim(ds, point_dim=kwargs.get("point_dim"))
+    time_name = _resolve_time_name(ds, time_name=kwargs.get("time_name"))
+
+    max_time_difference = kwargs.get("max_time_difference")
+    partition_method = kwargs.get("partition_method", "ptm1")
+    partition_kwargs = kwargs.get("partition_kwargs") or {}
+    regime_kwargs = kwargs.get("regime_kwargs") or {}
+
     spectral_lons, spectral_lats = get_spectral_coordinates(
         ds,
-        lon_name=kwargs.get("lon_name"),
-        lat_name=kwargs.get("lat_name"),
+        lon_name=lon_name,
+        lat_name=lat_name,
     )
 
     point_indexer = SpectralPointIndex(
@@ -821,28 +938,118 @@ def collocate_spectra(
 
     spectral_times = np.empty(npoints, dtype="datetime64[ns]")
 
-    for i in range(npoints):
-        logger.debug("Spectral collocation %d/%d", i + 1, npoints)
+    if npoints == 0:
+        result: dict[str, Any] = {
+            "wave_regime": wave_regime,
+            "wind_sea_fraction": wind_sea_fraction,
+            "n_wave_systems": n_wave_systems,
+            "hs_total": hs_total,
+            "spectral_point_index": point_index,
+            "spectral_distance_m": distance_m,
+            "spectral_time": spectral_times,
+            "spectral_time_difference_s": time_difference_s,
+        }
+        if return_profiling:
+            result["profiling"] = {
+                "n_observations": 0,
+                "n_unique_target_times": 0,
+                "n_unique_point_time_pairs": 0,
+                "t_total_s": 0.0,
+                "t_spatial_lookup_s": 0.0,
+                "t_time_lookup_s": 0.0,
+                "t_partition_and_regime_s": 0.0,
+            }
+        return result
 
-        result = collocate_spectrum(
-            ds,
-            lon=lons[i],
-            lat=lats[i],
-            time=times[i],
-            point_indexer=point_indexer,
-            **kwargs,
+    t_spatial_start = perf_counter()
+
+    finite_coords = np.isfinite(lons) & np.isfinite(lats)
+    if np.any(finite_coords):
+        indices, distances = point_indexer.query_many(
+            lons[finite_coords],
+            lats[finite_coords],
         )
+        point_index[finite_coords] = indices
+        distance_m[finite_coords] = distances
 
-        wave_regime[i] = result["wave_regime"]
-        wind_sea_fraction[i] = result["wind_sea_fraction"]
-        n_wave_systems[i] = result["n_wave_systems"]
-        hs_total[i] = result["hs_total"]
-        point_index[i] = result["spectral_point_index"]
-        distance_m[i] = result["spectral_distance_m"]
-        time_difference_s[i] = result["spectral_time_difference_s"]
-        spectral_times[i] = result["spectral_time"]
+    t_spatial_end = perf_counter()
 
-    return {
+    t_time_start = perf_counter()
+
+    available_times = get_spectral_times(ds, time_name=time_name)
+    time_index, matched_times, time_differences = _nearest_time_lookup(
+        available_times,
+        times,
+    )
+
+    spectral_times[:] = matched_times
+    time_difference_s[:] = time_differences
+
+    t_time_end = perf_counter()
+
+    valid = finite_coords & (point_index >= 0)
+    if max_time_difference is not None:
+        valid = valid & (time_difference_s <= max_time_difference)
+
+    t_partition_start = perf_counter()
+
+    if np.any(valid):
+        valid_indices = np.where(valid)[0]
+
+        pair_matrix = np.column_stack(
+            (time_index[valid_indices], point_index[valid_indices])
+        )
+        unique_pairs, inverse = np.unique(pair_matrix, axis=0, return_inverse=True)
+
+        regime_by_pair = np.full(len(unique_pairs), np.nan)
+        wind_fraction_by_pair = np.full(len(unique_pairs), np.nan)
+        n_systems_by_pair = np.full(len(unique_pairs), np.nan)
+        hs_total_by_pair = np.full(len(unique_pairs), np.nan)
+
+        for pair_i, (ti, pi) in enumerate(unique_pairs):
+            logger.debug(
+                "Spectral partitioning for unique pair %d/%d (time=%d, point=%d)",
+                pair_i + 1,
+                len(unique_pairs),
+                ti,
+                pi,
+            )
+
+            spectrum = extract_point_spectrum(
+                ds,
+                point_index=int(pi),
+                time_index=int(ti),
+                point_dim=point_dim,
+                time_name=time_name,
+            )
+
+            partitioned = partition_spectrum(
+                spectrum,
+                method=partition_method,
+                **partition_kwargs,
+            )
+
+            diagnostics = compute_wave_regime_diagnostics(
+                partitioned,
+                **regime_kwargs,
+            )
+
+            regime_by_pair[pair_i] = diagnostics["wave_regime"]
+            wind_fraction_by_pair[pair_i] = diagnostics["wind_sea_fraction"]
+            n_systems_by_pair[pair_i] = diagnostics["n_wave_systems"]
+            hs_total_by_pair[pair_i] = diagnostics["hs_total"]
+
+        mapped_pair_idx = inverse
+        wave_regime[valid_indices] = regime_by_pair[mapped_pair_idx]
+        wind_sea_fraction[valid_indices] = wind_fraction_by_pair[mapped_pair_idx]
+        n_wave_systems[valid_indices] = n_systems_by_pair[mapped_pair_idx]
+        hs_total[valid_indices] = hs_total_by_pair[mapped_pair_idx]
+    else:
+        unique_pairs = np.empty((0, 2), dtype=int)
+
+    t_partition_end = perf_counter()
+
+    result: dict[str, Any] = {
         "wave_regime": wave_regime,
         "wind_sea_fraction": wind_sea_fraction,
         "n_wave_systems": n_wave_systems,
@@ -852,6 +1059,19 @@ def collocate_spectra(
         "spectral_time": spectral_times,
         "spectral_time_difference_s": time_difference_s,
     }
+
+    if return_profiling:
+        result["profiling"] = {
+            "n_observations": int(npoints),
+            "n_unique_target_times": int(len(np.unique(times))),
+            "n_unique_point_time_pairs": int(len(unique_pairs)),
+            "t_total_s": float(perf_counter() - t0),
+            "t_spatial_lookup_s": float(t_spatial_end - t_spatial_start),
+            "t_time_lookup_s": float(t_time_end - t_time_start),
+            "t_partition_and_regime_s": float(t_partition_end - t_partition_start),
+        }
+
+    return result
 
 
 # ---------------------------------------------------------------------#
