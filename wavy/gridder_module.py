@@ -151,8 +151,8 @@ class gridder_class():
         """
         assigns observation coordinates to grid indices
         """
-        lonidx = ((olons-np.min(glons))/res[0]).astype(int)
-        latidx = ((olats-np.min(glats))/res[1]).astype(int)
+        lonidx = np.floor((olons-np.min(glons))/res[0]).astype(int)
+        latidx = np.floor((olats-np.min(glats))/res[1]).astype(int)
         Midx = np.array([lonidx, latidx], dtype=object)
         return Midx
 
@@ -230,8 +230,7 @@ class gridder_class():
         mask_llim_idx = np.where(mask_grid < mask_metric_llim)
         val_grid[mask_llim_idx[0], mask_llim_idx[1]] = np.nan
 
-        if kwargs.get('projection') is None:
-            projection = ccrs.PlateCarree()
+        projection = kwargs.get('projection', ccrs.PlateCarree())
         # parse kwargs
         if kwargs.get('cmap') is None:
             cmap = cmocean.cm.amp
