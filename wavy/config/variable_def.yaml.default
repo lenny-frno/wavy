@@ -211,7 +211,25 @@ dist_to_ice_edge:
     units: m
     valid_range: [0, 10000000]
     _FillValue: -999.9
-    
+
+wind_sea_fraction:
+    standard_name: wind_sea_fraction
+    long_name: 'fraction of wind sea in total wave spectrum'
+    units: '1'
+    _FillValue: -999.9
+
+n_wave_systems:
+    standard_name: number_of_wave_systems
+    long_name: 'number of wave systems in the spectrum'
+    units: NA
+    _FillValue: -999.9
+
+hs_total:
+    standard_name: sea_surface_wave_significant_height
+    long_name: 'total significant wave height'
+    units: m
+    _FillValue: -999.9
+
 hmax:
     standard_name: sea_surface_wave_maximum_height
     long_name: 'expected maximum wave height'
