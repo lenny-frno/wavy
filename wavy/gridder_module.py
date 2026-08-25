@@ -256,15 +256,44 @@ class gridder_class():
 
         projection = kwargs.get('projection', ccrs.PlateCarree())
         data_crs = kwargs.get('data_crs', ccrs.PlateCarree())
+        norm = kwargs.get('norm')
+
+        metric_meta = validation_metric_abbreviations.get(metric, {})
+        metric_name = metric_meta.get('name', metric)
+        is_bias_metric = (
+            'bias' in str(metric).lower()
+            or 'bias' in str(metric_name).lower())
+
         # parse kwargs
         if kwargs.get('cmap') is None:
-            cmap = cmocean.cm.amp
+            if is_bias_metric:
+                cmap = getattr(cmocean.cm, 'balance', None)
+                if cmap is None:
+                    cmap = mplcm.get_cmap('RdBu_r')
+            else:
+                cmap = cmocean.cm.amp
         else:
             cmap = kwargs.get('cmap')
+
+        if norm is None and is_bias_metric:
+            finite_vals = val_grid[np.isfinite(val_grid)]
+            if finite_vals.size > 0:
+                absmax = np.nanmax(np.abs(finite_vals))
+                if absmax > 0:
+                    norm = mpl.colors.TwoSlopeNorm(
+                        vmin=-absmax, vcenter=0.0, vmax=absmax)
+                else:
+                    norm = mpl.colors.CenteredNorm(vcenter=0.0)
+            else:
+                norm = mpl.colors.CenteredNorm(vcenter=0.0)
 
         # max/min for colorbar
         vmax = kwargs.get('vmax')
         vmin = kwargs.get('vmin')
+        if norm is not None:
+            # Matplotlib does not support passing vmin/vmax together with norm.
+            vmin = None
+            vmax = None
 
         # plot track if applicable
         if kwargs.get('lonmax') is not None:
@@ -299,7 +328,7 @@ class gridder_class():
         pc = ax.pcolormesh(
                 lon_grid, lat_grid, val_grid,
                 transform=data_crs, cmap=cmap,
-                vmax=vmax, vmin=vmin)
+                norm=norm, vmax=vmax, vmin=vmin)
 
         axins = inset_axes(ax,
                    width="5%",  # width = 5% of parent_bbox width
