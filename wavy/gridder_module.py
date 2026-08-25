@@ -264,6 +264,7 @@ class gridder_class:  # why not make a subclass of quicklook_class?
         val_grid[mask_llim_idx[0], mask_llim_idx[1]] = np.nan
 
         projection = kwargs.get("projection", ccrs.PlateCarree())
+        data_crs = kwargs.get("data_crs", ccrs.PlateCarree())
         # parse kwargs
         cmap = kwargs.get("cmap", cmocean.cm.amp)
 
@@ -311,24 +312,17 @@ class gridder_class:  # why not make a subclass of quicklook_class?
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1, projection=projection)
         # add land
-        ax.add_geometries(
-            land.intersecting_geometries([-180, 180, 0, 90]),
-            ccrs.PlateCarree(),
-            facecolor=cfeature.COLORS["land"],
-            edgecolor="black",
-            linewidth=1,
-        )
+        ax.add_feature(land, edgecolor="black", linewidth=1)
 
-        ax.set_extent([lonmin, lonmax, latmin, latmax], crs=ccrs.PlateCarree())
+        ax.set_extent([lonmin, lonmax, latmin, latmax], crs=data_crs)
         pc = ax.pcolormesh(
             lon_grid,
             lat_grid,
             val_grid,
-            transform=ccrs.PlateCarree(),
+            transform=data_crs,
             cmap=cmap,
-            norm=norm,
-            vmin=None if norm is not None else vmin,
-            vmax=None if norm is not None else vmax,
+            vmax=vmax,
+            vmin=vmin,
         )
 
         axins = inset_axes(
@@ -357,7 +351,7 @@ class gridder_class:  # why not make a subclass of quicklook_class?
         # ax.coastlines()
         gl = ax.gridlines(
             draw_labels=True,
-            crs=ccrs.PlateCarree(),
+            crs=data_crs,
             linewidth=1,
             color="grey",
             alpha=0.4,
