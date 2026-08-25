@@ -130,8 +130,12 @@ class gridder_class():
         """
         returns grid coordinates
         """
-        lons = np.arange(self.bb[0], self.bb[1]+self.res[0]/2, self.res[0])
-        lats = np.arange(self.bb[2], self.bb[3]+self.res[1]/2, self.res[1])
+        # Build coordinates without overshooting bb upper bounds for
+        # non-divisible ranges (e.g. -179..179 with 5 deg step).
+        nlon = int(np.floor((self.bb[1] - self.bb[0]) / self.res[0])) + 1
+        nlat = int(np.floor((self.bb[3] - self.bb[2]) / self.res[1])) + 1
+        lons = self.bb[0] + np.arange(nlon) * self.res[0]
+        lats = self.bb[2] + np.arange(nlat) * self.res[1]
         return np.array(lons), np.array(lats)
 
     def get_obs_grid_idx(self):
@@ -323,10 +327,16 @@ class gridder_class():
         from copy import deepcopy
 
         # shift coords for plotting
-        raw_lon_grid = kwargs.get('lon_grid')
-        raw_lat_grid = kwargs.get('lat_grid')
+        raw_lon_grid = np.asarray(kwargs.get('lon_grid'), dtype=float)
+        raw_lat_grid = np.asarray(kwargs.get('lat_grid'), dtype=float)
+        # Guard against out-of-range coordinate artifacts that can appear
+        # when grid coordinate generation overshoots the requested bb.
+        clipped_lon_grid = np.clip(raw_lon_grid, -180.0, 180.0)
+        clipped_lat_grid = np.clip(raw_lat_grid, -90.0, 90.0)
         lon_grid = raw_lon_grid + self.res[0]/2.
         lat_grid = raw_lat_grid + self.res[1]/2.
+        lon_grid = np.clip(lon_grid, -180.0, 180.0)
+        lat_grid = np.clip(lat_grid, -90.0, 90.0)
         debug_plot = bool(kwargs.get('debug_plot', False))
         logger = logging.getLogger(__name__)
 
@@ -498,8 +508,12 @@ class gridder_class():
                     'latmax': float(latmax)},
                 'raw_lon_grid': self._debug_array_range(raw_lon_grid),
                 'raw_lat_grid': self._debug_array_range(raw_lat_grid),
+                  'clipped_raw_lon_grid': self._debug_array_range(clipped_lon_grid),
+                  'clipped_raw_lat_grid': self._debug_array_range(clipped_lat_grid),
                 'shifted_lon_grid': self._debug_array_range(lon_grid),
                 'shifted_lat_grid': self._debug_array_range(lat_grid),
+                  'raw_lon_exceeds_180': bool(np.any(raw_lon_grid > 180.0)),
+                  'raw_lat_exceeds_90': bool(np.any(raw_lat_grid > 90.0)),
                 'figure_size_inches': tuple(float(v) for v in fig.get_size_inches()),
                 'map_rect': tuple(float(v) for v in map_rect),
                 'ax_position': tuple(float(v) for v in ax.get_position().bounds),
