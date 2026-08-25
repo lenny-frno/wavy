@@ -214,6 +214,30 @@ class gridder_class:  # why not make a subclass of quicklook_class?
         yb = np.array([glats, glats + res[1], glats + res[1], glats, glats])
         return xb, yb
 
+    @staticmethod
+    def _format_title_date(value):
+        """Return a stable string representation for mixed datetime-like types."""
+        date_value = value
+        if isinstance(date_value, np.datetime64):
+            return str(date_value)
+        if isinstance(date_value, np.ndarray) and date_value.shape == ():
+            scalar_value = date_value[()]
+            if isinstance(scalar_value, np.datetime64):
+                return str(scalar_value)
+            date_value = scalar_value
+        elif isinstance(date_value, np.generic):
+            date_value = date_value.item()
+        elif hasattr(date_value, "data") and not isinstance(date_value, np.ndarray):
+            date_value = date_value.data
+            if isinstance(date_value, np.datetime64):
+                return str(date_value)
+            if isinstance(date_value, np.ndarray) and date_value.shape == ():
+                scalar_value = date_value[()]
+                if isinstance(scalar_value, np.datetime64):
+                    return str(scalar_value)
+                date_value = scalar_value
+        return str(date_value)
+
     def grid_view(self, metric, mask_metric_llim, mask_metric, **kwargs):
         import cartopy.crs as ccrs
         import cartopy.feature as cfeature
@@ -347,9 +371,9 @@ class gridder_class:  # why not make a subclass of quicklook_class?
             + self.varalias
             + "\n"
             + "from "
-            + str(self.sdate.data)
+            + self._format_title_date(self.sdate)
             + " to "
-            + str(self.edate.data)
+            + self._format_title_date(self.edate)
         )
         if kwargs.get("title") is None:
             ax.set_title(autotitle)
