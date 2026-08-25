@@ -309,8 +309,10 @@ class gridder_class():
         from copy import deepcopy
 
         # shift coords for plotting
-        lon_grid = kwargs.get('lon_grid') + self.res[0]/2.
-        lat_grid = kwargs.get('lat_grid') + self.res[1]/2.
+        raw_lon_grid = kwargs.get('lon_grid')
+        raw_lat_grid = kwargs.get('lat_grid')
+        lon_grid = raw_lon_grid + self.res[0]/2.
+        lat_grid = raw_lat_grid + self.res[1]/2.
 
         # backup values
         all_grid = deepcopy(kwargs.get('val_grid'))
@@ -362,23 +364,36 @@ class gridder_class():
             vmin = None
             vmax = None
 
-        # plot track if applicable
-        if kwargs.get('lonmax') is not None:
-            lonmax = kwargs.get('lonmax')
-        else:
-            lonmax = np.max(lon_grid)
-        if kwargs.get('latmax') is not None:
-            latmax = kwargs.get('latmax')
-        else:
-            latmax = np.max(lat_grid)
+        # Determine extent from explicit kwargs or from unshifted grid/bbox.
+        # Using shifted cell centers can push lonmax > 180 and trigger
+        # dateline-wrap collapse in near-global stereographic plots.
         if kwargs.get('lonmin') is not None:
             lonmin = kwargs.get('lonmin')
+        elif self.bb is not None:
+            lonmin = self.bb[0]
         else:
-            lonmin = np.min(lon_grid)
+            lonmin = np.min(raw_lon_grid)
+
+        if kwargs.get('lonmax') is not None:
+            lonmax = kwargs.get('lonmax')
+        elif self.bb is not None:
+            lonmax = self.bb[1]
+        else:
+            lonmax = np.max(raw_lon_grid)
+
         if kwargs.get('latmin') is not None:
             latmin = kwargs.get('latmin')
+        elif self.bb is not None:
+            latmin = self.bb[2]
         else:
-            latmin = np.min(lat_grid)
+            latmin = np.min(raw_lat_grid)
+
+        if kwargs.get('latmax') is not None:
+            latmax = kwargs.get('latmax')
+        elif self.bb is not None:
+            latmax = self.bb[3]
+        else:
+            latmax = np.max(raw_lat_grid)
 
         # land
         land = cfeature.GSHHSFeature(
