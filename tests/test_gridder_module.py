@@ -31,6 +31,38 @@ def test_gridder_init(test_data):
     assert len(gridvar.keys()) == 13
 
 
+def test_assign_obs_to_grid_lower_bound_mapping():
+    glons = np.array([0.0, 1.0, 2.0])
+    glats = np.array([10.0, 11.0, 12.0])
+    res = (1.0, 1.0)
+    eps = 1e-12
+
+    olons = np.array([0.0, -eps])
+    olats = np.array([10.0, 10.0-eps])
+
+    Midx = gc.assign_obs_to_grid(glons, glats, olons, olats, res)
+
+    assert Midx[0][0] == 0
+    assert Midx[1][0] == 0
+    assert Midx[0][1] == -1
+    assert Midx[1][1] == -1
+
+
+def test_gridder_filters_points_just_below_lower_bound():
+    eps = 1e-12
+    gco = gc(
+        lons=np.array([0.0, -eps]),
+        lats=np.array([10.0, 10.0]),
+        values=np.array([1.0, 2.0]),
+        bb=(0.0, 2.0, 10.0, 12.0),
+        res=(1.0, 1.0),
+    )
+
+    assert np.array_equal(gco.Midx_clean[0], np.array([0]))
+    assert np.array_equal(gco.Midx_clean[1], np.array([0]))
+    assert np.array_equal(gco.ovals_clean, np.array([1.0]))
+
+
 
 
 #def test_gridder_lowres(test_data, benchmark):

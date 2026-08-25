@@ -7,14 +7,15 @@ from wavy.grid_stats import apply_metric
 from wavy.wconfig import load_or_default
 import logging
 
-validation_metric_abbreviations = load_or_default('validation_metrics.yaml')
-variable_def = load_or_default('variable_def.yaml')
+validation_metric_abbreviations = load_or_default("validation_metrics.yaml")
+variable_def = load_or_default("variable_def.yaml")
 
-class gridder_class(): # why not make a subclass of quicklook_class?
+
+class gridder_class:  # why not make a subclass of quicklook_class?
 
     def __init__(
-    self, oco=None, mco=None, cco=None, bb=None, grid='lonlat', res=(1, 1),
-    **kwargs):
+        self, oco=None, mco=None, cco=None, bb=None, grid="lonlat", res=(1, 1), **kwargs
+    ):
         """
         setup the gridder
         grid: lonlat or in m
@@ -23,99 +24,106 @@ class gridder_class(): # why not make a subclass of quicklook_class?
              in degree where tupel is (lon,lat) dimension
         """
         logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
+        log_level = str(kwargs.get("logging", "WARNING").upper())
         logger.setLevel(getattr(logging, log_level, logging.WARNING))
 
-        logger.info('# ----- ')
+        logger.info("# ----- ")
         logger.info(" ### Initializing gridder_class object ###")
         logger.info(" ")
         self.mvals = None
         if oco is not None:
-            self.varalias = kwargs.get('varalias', oco.varalias)
+            self.varalias = kwargs.get("varalias", oco.varalias)
             if isinstance(self.varalias, list):
                 if len(self.varalias) > 1:
-                    logger.warning(
-                        "Warning: gridder only expects one varalias.")
+                    logger.warning("Warning: gridder only expects one varalias.")
                     logger.warning(
                         "First varalias selected as default: {}".format(
-                           self.varalias[0]))
+                            self.varalias[0]
+                        )
+                    )
                     logger.warning(
-                        "If you want to select another variable, please "\
-                          +"specify with varalias argument.")
-                self.varalias=self.varalias[0]
-            self.units = variable_def[self.varalias].get('units')
-            self.stdvarname = variable_def[self.varalias].get('standard_name')
-            self.olons = np.array(oco.vars['lons'].squeeze().values.ravel())
-            self.olats = np.array(oco.vars['lats'].squeeze().values.ravel())
+                        "If you want to select another variable, please "
+                        + "specify with varalias argument."
+                    )
+                self.varalias = self.varalias[0]
+            self.units = variable_def[self.varalias].get("units")
+            self.stdvarname = variable_def[self.varalias].get("standard_name")
+            self.olons = np.array(oco.vars["lons"].squeeze().values.ravel())
+            self.olats = np.array(oco.vars["lats"].squeeze().values.ravel())
             self.ovals = np.array(oco.vars[self.varalias].squeeze().values.ravel())
-            self.sdate = oco.vars['time'][0]
-            self.edate = oco.vars['time'][-1]
+            self.sdate = oco.vars["time"][0]
+            self.edate = oco.vars["time"][-1]
         elif cco is not None:
-            self.varalias = kwargs.get('varalias', cco.varalias)
+            self.varalias = kwargs.get("varalias", cco.varalias)
             if isinstance(self.varalias, list):
                 if len(self.varalias) > 1:
-                    logger.warning(
-                        "Warning: gridder only expects one varalias.")
+                    logger.warning("Warning: gridder only expects one varalias.")
                     logger.warning(
                         "First varalias selected as default: {}".format(
-                           self.varalias[0]))
+                            self.varalias[0]
+                        )
+                    )
                     logger.warning(
-                        "If you want to select another variable, please " +\
-                          "specify with varalias argument.")
-                self.varalias=self.varalias[0]
+                        "If you want to select another variable, please "
+                        + "specify with varalias argument."
+                    )
+                self.varalias = self.varalias[0]
 
             list_vars = list(cco.vars.variables)
-            assert 'model_' + self.varalias in list_vars,\
-                            "model_{}".format(self.varalias) +\
-                                      " is missing in " +\
-                                      "the dataset, if you would like to " +\
-                                      "validate another variable, please " +\
-                                      "specify with varalias."
-            assert 'obs_' + self.varalias in list_vars,\
-                          "obs_{}".format(self.varalias) +\
-                                      " is missing in " +\
-                                      "the dataset, if you would like to " +\
-                                      "validate another variable, please " +\
-                                      "specify with varalias."
-            self.olons = np.array(cco.vars['obs_lons'])
-            self.olats = np.array(cco.vars['obs_lats'])
-            self.ovals = np.array(cco.vars['obs_'+self.varalias])
-            self.mvals = np.array(cco.vars['model_'+self.varalias])
-            self.units = variable_def[self.varalias].get('units')
-            self.stdvarname = variable_def[self.varalias].get('standard_name')
-            self.sdate = cco.vars['time'][0]
-            self.edate = cco.vars['time'][-1]
+            assert "model_" + self.varalias in list_vars, (
+                "model_{}".format(self.varalias)
+                + " is missing in "
+                + "the dataset, if you would like to "
+                + "validate another variable, please "
+                + "specify with varalias."
+            )
+            assert "obs_" + self.varalias in list_vars, (
+                "obs_{}".format(self.varalias)
+                + " is missing in "
+                + "the dataset, if you would like to "
+                + "validate another variable, please "
+                + "specify with varalias."
+            )
+            self.olons = np.array(cco.vars["obs_lons"])
+            self.olats = np.array(cco.vars["obs_lats"])
+            self.ovals = np.array(cco.vars["obs_" + self.varalias])
+            self.mvals = np.array(cco.vars["model_" + self.varalias])
+            self.units = variable_def[self.varalias].get("units")
+            self.stdvarname = variable_def[self.varalias].get("standard_name")
+            self.sdate = cco.vars["time"][0]
+            self.edate = cco.vars["time"][-1]
         elif mco is not None:
-            self.varalias = kwargs.get('varalias', mco.varalias)
+            self.varalias = kwargs.get("varalias", mco.varalias)
             if isinstance(self.varalias, list):
                 if len(self.varalias) > 1:
-                    logger.warning(
-                        "Warning: gridder only expects one varalias.")
+                    logger.warning("Warning: gridder only expects one varalias.")
                     logger.warning(
                         "First varalias selected as default: {}".format(
-                           self.varalias[0]))
+                            self.varalias[0]
+                        )
+                    )
                     logger.warning(
-                        "If you want to select another variable, please "\
-                          +"specify with varalias argument.")
-                self.varalias=self.varalias[0]
+                        "If you want to select another variable, please "
+                        + "specify with varalias argument."
+                    )
+                self.varalias = self.varalias[0]
             self.olons = np.array(mco.vars.lons.squeeze().values.flatten())
             self.olats = np.array(mco.vars.lats.squeeze().values.flatten())
-            self.ovals = np.array(
-                    mco.vars[self.varalias].squeeze().values.flatten())
+            self.ovals = np.array(mco.vars[self.varalias].squeeze().values.flatten())
             self.stdvarname = mco.stdvarname
-            self.units = variable_def[self.varalias].get('units')
-            self.stdvarname = variable_def[self.varalias].get('standard_name')
-            self.sdate = mco.vars['time'][0]
-            self.edate = mco.vars['time'][-1]
+            self.units = variable_def[self.varalias].get("units")
+            self.stdvarname = variable_def[self.varalias].get("standard_name")
+            self.sdate = mco.vars["time"][0]
+            self.edate = mco.vars["time"][-1]
         else:
-            self.olons = kwargs.get('lons')
-            self.olats = kwargs.get('lats')
-            self.ovals = kwargs.get('values')
-            self.stdvarname = kwargs.get('stdvarname', None)
-            self.varalias = kwargs.get('varalias', None)
-            self.units = kwargs.get('units', None)
-            self.sdate = kwargs.get('sdate', None)
-            self.edate = kwargs.get('edate', None)
+            self.olons = kwargs.get("lons")
+            self.olats = kwargs.get("lats")
+            self.ovals = kwargs.get("values")
+            self.stdvarname = kwargs.get("stdvarname", None)
+            self.varalias = kwargs.get("varalias", None)
+            self.units = kwargs.get("units", None)
+            self.sdate = kwargs.get("sdate", None)
+            self.edate = kwargs.get("edate", None)
 
         self.bb = bb
         self.res = res
@@ -127,27 +135,27 @@ class gridder_class(): # why not make a subclass of quicklook_class?
         self.Midx_clean = Midx
         logger.info(" ")
         logger.info(" ### gridder_class object initialized ###")
-        logger.info('# ----- ')
+        logger.info("# ----- ")
 
     def create_grid_coords(self):
         """
         returns grid coordinates
         """
         lon_min = max(-180, self.bb[0])
-        lon_max = min(180, np.floor(self.bb[1]+self.res[0]/2))
+        lon_max = min(180, np.floor(self.bb[1] + self.res[0] / 2))
         lons = np.arange(lon_min, lon_max, self.res[0])
         lat_min = max(-90, self.bb[2])
-        lat_max = min(90, np.floor(self.bb[3]+self.res[1]/2))
+        lat_max = min(90, np.floor(self.bb[3] + self.res[1] / 2))
         lats = np.arange(lat_min, lat_max, self.res[1])
         return np.array(lons), np.array(lats)
 
     def get_obs_grid_idx(self):
         Midx = self.assign_obs_to_grid(
-                self.glons, self.glats,
-                self.olons, self.olats,
-                self.res)
+            self.glons, self.glats, self.olons, self.olats, self.res
+        )
         ovals, mvals, Midx = self.clean_Midx(
-                Midx, self.ovals, self.mvals, self.glons, self.glats)
+            Midx, self.ovals, self.mvals, self.glons, self.glats
+        )
         return ovals, mvals, Midx
 
     @staticmethod
@@ -155,8 +163,8 @@ class gridder_class(): # why not make a subclass of quicklook_class?
         """
         assigns observation coordinates to grid indices
         """
-        lonidx = ((olons-np.min(glons))/res[0]).astype(int)
-        latidx = ((olats-np.min(glats))/res[1]).astype(int)
+        lonidx = np.floor((olons - np.min(glons)) / res[0]).astype(int)
+        latidx = np.floor((olats - np.min(glats)) / res[1]).astype(int)
         Midx = np.array([lonidx, latidx], dtype=object)
         return Midx
 
@@ -202,12 +210,8 @@ class gridder_class(): # why not make a subclass of quicklook_class?
 
     @staticmethod
     def get_exteriors(glons, glats, res):
-        xb = np.array([glons+res[0], glons+res[0],
-                       glons, glons,
-                       glons+res[0]])
-        yb = np.array([glats,
-                       glats+res[1], glats+res[1],
-                       glats, glats])
+        xb = np.array([glons + res[0], glons + res[0], glons, glons, glons + res[0]])
+        yb = np.array([glats, glats + res[1], glats + res[1], glats, glats])
         return xb, yb
 
     def grid_view(self, metric, mask_metric_llim, mask_metric, **kwargs):
@@ -223,11 +227,11 @@ class gridder_class(): # why not make a subclass of quicklook_class?
         from matplotlib.colors import BoundaryNorm
 
         # shift coords for plotting
-        lon_grid = kwargs.get('lon_grid') + self.res[0]/2.
-        lat_grid = kwargs.get('lat_grid') + self.res[1]/2.
+        lon_grid = kwargs.get("lon_grid") + self.res[0] / 2.0
+        lat_grid = kwargs.get("lat_grid") + self.res[1] / 2.0
 
         # backup values
-        all_grid = deepcopy(kwargs.get('val_grid'))
+        all_grid = deepcopy(kwargs.get("val_grid"))
         mask_grid = all_grid[mask_metric]
         val_grid = all_grid[metric]
 
@@ -235,61 +239,61 @@ class gridder_class(): # why not make a subclass of quicklook_class?
         mask_llim_idx = np.where(mask_grid < mask_metric_llim)
         val_grid[mask_llim_idx[0], mask_llim_idx[1]] = np.nan
 
-        projection = kwargs.get('projection', ccrs.PlateCarree())
-
+        projection = kwargs.get("projection", ccrs.PlateCarree())
         # parse kwargs
-        cmap = kwargs.get('cmap',cmocean.cm.amp)
+        cmap = kwargs.get("cmap", cmocean.cm.amp)
 
         # max/min for colorbar
-        vmax = kwargs.get('vmax',None)
-        vmin = kwargs.get('vmin',None)
+        vmax = kwargs.get("vmax", None)
+        vmin = kwargs.get("vmin", None)
         norm = None
         levels = None
 
-        if metric in ['bias', 'nbias']:
+        if metric in ["bias", "nbias"]:
             # default levels for bias and nbias
-            levels = np.asarray(kwargs.get(
-                'bias_levels',
-                [-1.5, -1, -0.5, -0.25, 0, 0.25, 0.5, 1, 1.5]
-            ))
-            cmap = kwargs.get('bias_cmap', cmocean.cm.balance)
-            norm = kwargs.get('bias_norm', BoundaryNorm(levels, cmap.N, clip=True))
+            levels = np.asarray(
+                kwargs.get("bias_levels", [-1.5, -1, -0.5, -0.25, 0, 0.25, 0.5, 1, 1.5])
+            )
+            cmap = kwargs.get("bias_cmap", cmocean.cm.balance)
+            norm = kwargs.get("bias_norm", BoundaryNorm(levels, cmap.N, clip=True))
             vmin = levels[0]
             vmax = levels[-1]
-            
 
         # plot track if applicable
-        if kwargs.get('lonmax') is not None:
-            lonmax = kwargs.get('lonmax')
+        if kwargs.get("lonmax") is not None:
+            lonmax = kwargs.get("lonmax")
         else:
             lonmax = np.max(lon_grid)
-        if kwargs.get('latmax') is not None:
-            latmax = kwargs.get('latmax')
+        if kwargs.get("latmax") is not None:
+            latmax = kwargs.get("latmax")
         else:
             latmax = np.max(lat_grid)
-        if kwargs.get('lonmin') is not None:
-            lonmin = kwargs.get('lonmin')
+        if kwargs.get("lonmin") is not None:
+            lonmin = kwargs.get("lonmin")
         else:
             lonmin = np.min(lon_grid)
-        if kwargs.get('latmin') is not None:
-            latmin = kwargs.get('latmin')
+        if kwargs.get("latmin") is not None:
+            latmin = kwargs.get("latmin")
         else:
             latmin = np.min(lat_grid)
 
         # land
         land = cfeature.GSHHSFeature(
-                    scale=kwargs.get('land_mask_resolution', 'i'),
-                    levels=[1],
-                    facecolor=cfeature.COLORS['land'])
+            scale=kwargs.get("land_mask_resolution", "i"),
+            levels=[1],
+            facecolor=cfeature.COLORS["land"],
+        )
 
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1, projection=projection)
         # add land
-        ax.add_geometries(land.intersecting_geometries(
-                    [-180, 180, 0, 90]),
-                    ccrs.PlateCarree(),
-                    facecolor=cfeature.COLORS['land'],
-                    edgecolor='black', linewidth=1)
+        ax.add_geometries(
+            land.intersecting_geometries([-180, 180, 0, 90]),
+            ccrs.PlateCarree(),
+            facecolor=cfeature.COLORS["land"],
+            edgecolor="black",
+            linewidth=1,
+        )
 
         ax.set_extent([lonmin, lonmax, latmin, latmax], crs=ccrs.PlateCarree())
         pc = ax.pcolormesh(
@@ -303,52 +307,62 @@ class gridder_class(): # why not make a subclass of quicklook_class?
             vmax=None if norm is not None else vmax,
         )
 
-        axins = inset_axes(ax,
-                   width="5%",  # width = 5% of parent_bbox width
-                   height="100%",  # height : 50%
-                   loc='lower left',
-                   bbox_to_anchor=(1.01, 0., 1, 1),
-                   bbox_transform=ax.transAxes,
-                   borderpad=0,
-                   )
+        axins = inset_axes(
+            ax,
+            width="5%",  # width = 5% of parent_bbox width
+            height="100%",  # height : 50%
+            loc="lower left",
+            bbox_to_anchor=(1.01, 0.0, 1, 1),
+            bbox_transform=ax.transAxes,
+            borderpad=0,
+        )
 
-        metric_name = validation_metric_abbreviations[metric].get('name')
-        metric_units =\
-            validation_metric_abbreviations[metric].get('units', self.units)
+        metric_name = validation_metric_abbreviations[metric].get("name")
+        metric_units = validation_metric_abbreviations[metric].get("units", self.units)
         cbar = fig.colorbar(
             pc,
             cax=axins,
-            label=metric_name if metric_units is None
-                else f"{metric_name} [{metric_units}]",
+            label=(
+                metric_name
+                if metric_units is None
+                else f"{metric_name} [{metric_units}]"
+            ),
             ticks=levels,
         )
 
-
         # ax.coastlines()
-        gl = ax.gridlines(draw_labels=True, crs=ccrs.PlateCarree(),
-                          linewidth=1, color='grey', alpha=0.4,
-                          linestyle='-')
+        gl = ax.gridlines(
+            draw_labels=True,
+            crs=ccrs.PlateCarree(),
+            linewidth=1,
+            color="grey",
+            alpha=0.4,
+            linestyle="-",
+        )
         gl.top_labels = False
         gl.right_labels = False
         plt.subplots_adjust(bottom=0.1, right=0.8, top=0.9)
-        autotitle = ('Base variable: ' + self.varalias + '\n'
-                     + 'from ' + str(self.sdate.data)
-                     + ' to ' + str(self.edate.data))
-        if kwargs.get('title') is None:
+        autotitle = (
+            "Base variable: "
+            + self.varalias
+            + "\n"
+            + "from "
+            + str(self.sdate.data)
+            + " to "
+            + str(self.edate.data)
+        )
+        if kwargs.get("title") is None:
             ax.set_title(autotitle)
         else:
-            ax.set_title(kwargs.get('title'))
+            ax.set_title(kwargs.get("title"))
         ax.title.set_size(11)
         # todo: add info on observation and model source for figure
         plt.show()
 
-    def quicklook(self, metric='mor',
-                  mask_metric_llim=10,
-                  mask_metric='nov',
-                  **kwargs):
+    def quicklook(self, metric="mor", mask_metric_llim=10, mask_metric="nov", **kwargs):
 
-        if metric == 'all':
-            for key in kwargs['val_grid'].keys():
+        if metric == "all":
+            for key in kwargs["val_grid"].keys():
                 self.grid_view(key, mask_metric_llim, mask_metric, **kwargs)
         else:
             self.grid_view(metric, mask_metric_llim, mask_metric, **kwargs)
