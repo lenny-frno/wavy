@@ -894,20 +894,16 @@ class collocation_class(qls):
 
     def add_wave_regime(self, spectral_file, **kwargs):
         """
-        Adds 'wave_regime' to self.vars by collocating observations with
+        Adds 'wave_regime', 'wind_sea_fraction', 'n_wave_systems' and
+        'hs_total' to self.vars by collocating observations with
         unstructured wave spectra.
 
-        Spectral collocation is performed once per unique model time
-        to avoid repeatedly accessing the same spectral time/file.
-
         kwargs:
-            point_dim (str): dimension containing spectral points
-            time_name (str): spectral time coordinate
-            lon_name (str): spectral longitude coordinate
-            lat_name (str): spectral latitude coordinate
+            point_dim, time_name, lon_name, lat_name : spectral coord names
             partition_method (str): wavespectra partitioning method
             partition_kwargs (dict): arguments for spectral partitioning
-            regime_kwargs (dict): arguments for wave-regime classification
+            regime_kwargs (dict): wind_sea_threshold, swell_dominated_threshold,
+                min_partition_contribution, hs_calm
             max_time_difference (float): maximum allowed time difference [s]
         """
         from wavy.spectra_module import (
@@ -924,14 +920,17 @@ class collocation_class(qls):
         model_times = pd.to_datetime(new.vars['model_time'].values)
         unique_times = pd.unique(model_times)
 
-        wave_regime = np.full(len(model_times), np.nan)
+        npoints = len(model_times)
+        wave_regime = np.full(npoints, np.nan)
+        wind_sea_fraction = np.full(npoints, np.nan)
+        n_wave_systems = np.full(npoints, np.nan)
+        hs_total = np.full(npoints, np.nan)
 
         logger.info(
-            'Computing wave regime for %d unique model time steps',
+            'Computing wave regime diagnostics for %d unique model time steps',
             len(unique_times)
         )
 
-        # Read the spectral file once.
         ds = read_spectral_file(spectral_file)
 
         for t in unique_times:
@@ -941,11 +940,7 @@ class collocation_class(qls):
 
             pts_lons = new.vars['obs_lons'].values[idx]
             pts_lats = new.vars['obs_lats'].values[idx]
-            pts_times = np.full(
-                len(idx),
-                t_dt,
-                dtype='datetime64[ns]'
-            )
+            pts_times = np.full(len(idx), t_dt, dtype='datetime64[ns]')
 
             result = collocate_spectra(
                 ds,
@@ -956,18 +951,22 @@ class collocation_class(qls):
             )
 
             wave_regime[idx] = result['wave_regime']
+            wind_sea_fraction[idx] = result['wind_sea_fraction']
+            n_wave_systems[idx] = result['n_wave_systems']
+            hs_total[idx] = result['hs_total']
 
         new.vars = new.vars.assign(
             {
-                'wave_regime': (
-                    ('time'),
-                    wave_regime
-                )
+                'wave_regime': (('time'), wave_regime),
+                'wind_sea_fraction': (('time'), wind_sea_fraction),
+                'n_wave_systems': (('time'), n_wave_systems),
+                'hs_total': (('time'), hs_total),
             }
         )
 
-        if 'wave_regime' in variable_def:
-            new.vars['wave_regime'].attrs = variable_def['wave_regime']
+        for varname in ('wave_regime', 'wind_sea_fraction', 'n_wave_systems', 'hs_total'):
+            if varname in variable_def:
+                new.vars[varname].attrs = variable_def[varname]
 
         print(
             ' Number of points without wave regime:',
