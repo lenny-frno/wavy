@@ -27,9 +27,9 @@ import pandas as pd
 from sklearn.neighbors import BallTree
 
 try:
-    from wavespectra import read_netcdf
+    import wavespectra
 except ImportError:
-    read_netcdf = None
+    wavespectra = None
 
 
 EARTH_RADIUS_M = 6371000.0
@@ -41,7 +41,7 @@ EARTH_RADIUS_M = 6371000.0
 
 def _check_wavespectra():
     """Raise a useful error if wavespectra is not installed."""
-    if read_netcdf is None:
+    if wavespectra is None:
         raise ImportError(
             "wavespectra is required for spectral processing. "
             "Install it with `pip install wavespectra`."
@@ -75,61 +75,6 @@ def _datetime_difference_seconds(times, target):
     return np.abs(times - target).astype("timedelta64[s]").astype(float)
 
 
-# ---------------------------------------------------------------------#
-# Spectral file reader
-# ---------------------------------------------------------------------#
-def _resolve_spectral_name(
-    ds,
-    requested,
-    candidates,
-    kind,
-):
-    """
-    Resolve a spectral variable/dimension name.
-
-    Parameters
-    ----------
-    ds : xarray.Dataset
-        Dataset opened from the spectral file.
-    requested : str, optional
-        Explicit name supplied by the user.
-    candidates : list[str]
-        Names to try if no explicit name is supplied.
-    kind : str
-        Human-readable description used in error messages.
-
-    Returns
-    -------
-    str
-        Resolved name.
-    """
-    if requested is not None:
-        if requested in ds.dims or requested in ds.coords or requested in ds:
-            return requested
-
-        raise KeyError(
-            f"Specified {kind} name '{requested}' was not found. "
-            f"Available dimensions: {list(ds.dims)}; "
-            f"coordinates: {list(ds.coords)}; "
-            f"variables: {list(ds.data_vars)}"
-        )
-
-    for candidate in candidates:
-        if (
-            candidate in ds.dims
-            or candidate in ds.coords
-            or candidate in ds
-        ):
-            return candidate
-
-    raise KeyError(
-        f"Could not identify spectral {kind}. "
-        f"Tried: {candidates}. "
-        f"Available dimensions: {list(ds.dims)}; "
-        f"coordinates: {list(ds.coords)}; "
-        f"variables: {list(ds.data_vars)}"
-    )
-
 def _normalize_spectral_dataset(ds):
     """
     Normalize environmental variable names to those expected by wavy.
@@ -153,18 +98,17 @@ def _normalize_spectral_dataset(ds):
 @lru_cache(maxsize=8)
 def read_spectral_file(filename, **kwargs):
     """
-    Read a spectral NetCDF file using wavespectra.
+    Read a native WAVEWATCH III spectral NetCDF file using wavespectra.
 
-    The spectral frequency and direction names are automatically
-    resolved. For example:
+    The WW3 backend is required rather than the generic NetCDF reader:
+    WW3 stores directional spectral density per radian and its spectral
+    direction coordinate in a going-to convention. The backend converts
+    density to per degree and the spectral direction coordinate to
+    wavespectra's coming-from convention before the spectrum is integrated
+    or passed to PTM1. Native WW3 ``wnddir`` is already a wind-from
+    direction and is therefore renamed, not rotated, by the backend.
 
-        frequency: ``freq`` or ``frequency``
-        direction: ``dir`` or ``direction``
-
-    Explicit names can be supplied through ``freq_name`` and
-    ``dir_name``.
-
-    The dataset is normalized by wavespectra to use:
+    The dataset is normalized by the backend to use:
 
         frequency
         direction
@@ -177,94 +121,29 @@ def read_spectral_file(filename, **kwargs):
     logger = logging.getLogger(__name__)
     logger.debug("Reading spectral file: %s", filename)
 
-    # Open only the metadata first so that we can discover the actual
-    # NetCDF dimension/coordinate names before calling wavespectra.
     import xarray as xr
 
-    with xr.open_dataset(filename) as raw_ds:
-
-        freq_name = _resolve_spectral_name(
-            raw_ds,
-            requested=kwargs.get("freq_name"),
-            candidates=["freq", "frequency"],
-            kind="frequency",
+    unexpected = set(kwargs) - {"chunks"}
+    if unexpected:
+        raise TypeError(
+            "read_spectral_file only accepts 'chunks' for native WW3 files; "
+            f"unsupported arguments: {sorted(unexpected)}"
         )
 
-        dir_name = _resolve_spectral_name(
-            raw_ds,
-            requested=kwargs.get("dir_name"),
-            candidates=["dir", "direction"],
-            kind="direction",
-        )
-
-        # The remaining names can also be resolved in the same way.
-        point_dim = _resolve_spectral_name(
-            raw_ds,
-            requested=kwargs.get("point_dim"),
-            candidates=[
-                "site",
-                "station",
-                "point",
-                "node",
-                "location",
-            ],
-            kind="spectral point dimension",
-        )
-
-        lon_name = _resolve_spectral_name(
-            raw_ds,
-            requested=kwargs.get("lon_name"),
-            candidates=["lon", "longitude", "lons"],
-            kind="longitude",
-        )
-
-        lat_name = _resolve_spectral_name(
-            raw_ds,
-            requested=kwargs.get("lat_name"),
-            candidates=["lat", "latitude", "lats"],
-            kind="latitude",
-        )
-
-        time_name = _resolve_spectral_name(
-            raw_ds,
-            requested=kwargs.get("time_name"),
-            candidates=["time", "datetime", "valid_time"],
-            kind="time",
-        )
-
-        spec_name = _resolve_spectral_name(
-            raw_ds,
-            requested=kwargs.get("spec_name"),
-            candidates=["efth"],
-            kind="spectral energy variable",
-        )
-
-    logger.debug(
-        "Resolved spectral names: "
-        "freq=%s, dir=%s, point=%s, lon=%s, lat=%s, time=%s, spec=%s",
-        freq_name,
-        dir_name,
-        point_dim,
-        lon_name,
-        lat_name,
-        time_name,
-        spec_name,
-    )
-
-    read_kwargs = {
-        "freqname": freq_name,
-        "dirname": dir_name,
-        "sitename": point_dim,
-        "specname": spec_name,
-        "lonname": lon_name,
-        "latname": lat_name,
-        "timename": time_name,
-    }
-
+    open_kwargs = {"engine": "ww3"}
     if kwargs.get("chunks") is not None:
-        read_kwargs["chunks"] = kwargs["chunks"]
+        open_kwargs["chunks"] = kwargs["chunks"]
 
-    ds = read_netcdf(filename, **read_kwargs)
+    try:
+        ds = xr.open_dataset(filename, **open_kwargs)
+    except Exception as exc:
+        raise ValueError(
+            f"Could not read '{filename}' with wavespectra's WW3 backend. "
+            "This reader intentionally does not fall back to the generic "
+            "NetCDF path because it would misinterpret native WW3 directional "
+            "spectra."
+        ) from exc
+
     ds = _normalize_spectral_dataset(ds)
 
     # ------------------------------------------------------------------

@@ -33,6 +33,7 @@ dependencies:
   - copernicusmarine>=2.0
   - dill
   - geopandas
+  - wavespectra
   - pip
   - pip:
     - click
