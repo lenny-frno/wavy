@@ -654,42 +654,111 @@ def partition_spectrum(
 
     return partition_method(**kwargs)
 
-
 # ---------------------------------------------------------------------#
-# Wave-regime classification
+# Wave-regime classification and diagnostics
 # ---------------------------------------------------------------------#
 
-def classify_wave_regime(
+def compute_wave_regime_diagnostics(
     partitioned,
-    wind_sea_fraction=0.5,
-    swell_dominated_fraction=0.5,
+    wind_sea_threshold=0.75,
+    swell_dominated_threshold=0.25,
+    min_partition_contribution=0.05,
+    hs_calm=None,
 ):
-    stats = partitioned.spec.stats(["hs"])
+    """
+    Compute wave-regime diagnostics from a partitioned spectrum.
 
+    Assumes PTM1 partition ordering: part=0 is wind sea, the
+    remaining partitions are swells sorted by descending Hs.
+
+    Parameters
+    ----------
+    partitioned : xarray.Dataset
+        Output of partition_spectrum.
+    wind_sea_threshold : float
+        Wind-sea energy fraction at/above which the regime is
+        wind-sea dominated.
+    swell_dominated_threshold : float
+        Wind-sea energy fraction at/below which the regime is
+        swell dominated.
+    min_partition_contribution : float
+        Minimum fraction of total energy a partition must carry to
+        be counted as a distinct wave system (filters watershed
+        noise partitions).
+    hs_calm : float, optional
+        Total Hs below which conditions are considered calm and
+        n_wave_systems is forced to zero. If None, no calm check
+        is applied.
+
+    Returns
+    -------
+    dict
+        wave_regime : int or nan
+            0 = wind-sea dominated, 1 = mixed, 2 = swell dominated.
+        wind_sea_fraction : float
+            Energy fraction attributed to the wind-sea partition.
+        n_wave_systems : int or nan
+            Number of partitions carrying at least
+            min_partition_contribution of total energy (0 if calm).
+        hs_total : float
+            Combined significant wave height across all partitions.
+    """
+    stats = partitioned.spec.stats(["hs"])
     hs = np.asarray(stats["hs"].values).squeeze()
     hs = hs[np.isfinite(hs)]
 
-    if hs.size == 0:
-        return np.nan
+    nan_result = {
+        "wave_regime": np.nan,
+        "wind_sea_fraction": np.nan,
+        "n_wave_systems": np.nan,
+        "hs_total": np.nan,
+    }
 
-    total_energy = np.sum(hs ** 2)
+    if hs.size == 0:
+        return nan_result
+
+    energy = hs ** 2
+    total_energy = np.sum(energy)
 
     if total_energy <= 0:
-        return np.nan
+        return nan_result
 
-    wind_sea_energy = hs[0] ** 2
-    swell_energy = np.sum(hs[1:] ** 2)
+    hs_total = float(np.sqrt(total_energy))
+    wind_sea_fraction = float(energy[0] / total_energy)
 
-    wind_fraction = wind_sea_energy / total_energy
-    swell_fraction = swell_energy / total_energy
+    if wind_sea_fraction >= wind_sea_threshold:
+        wave_regime = 0
+    elif wind_sea_fraction <= swell_dominated_threshold:
+        wave_regime = 2
+    else:
+        wave_regime = 1
 
-    if wind_fraction >= wind_sea_fraction:
-        return 0
+    energy_fraction = energy / total_energy
+    n_wave_systems = int(np.sum(energy_fraction >= min_partition_contribution))
 
-    if swell_fraction >= swell_dominated_fraction:
-        return 2
+    if hs_calm is not None and hs_total < hs_calm:
+        n_wave_systems = 0
 
-    return 1
+    return {
+        "wave_regime": wave_regime,
+        "wind_sea_fraction": wind_sea_fraction,
+        "n_wave_systems": n_wave_systems,
+        "hs_total": hs_total,
+    }
+
+
+def classify_wave_regime(
+    partitioned,
+    wind_sea_threshold=0.75,
+    swell_dominated_threshold=0.25,
+):
+    """Kept for backwards compatibility; prefer
+    compute_wave_regime_diagnostics for new code."""
+    return compute_wave_regime_diagnostics(
+        partitioned,
+        wind_sea_threshold=wind_sea_threshold,
+        swell_dominated_threshold=swell_dominated_threshold,
+    )["wave_regime"]
 
 
 # ---------------------------------------------------------------------#
@@ -771,6 +840,9 @@ def collocate_spectrum(
 
         return {
             "wave_regime": np.nan,
+            "wind_sea_fraction": np.nan,
+            "n_wave_systems": np.nan,
+            "hs_total": np.nan,
             "spectral_point_index": point_index,
             "spectral_distance_m": distance_m,
             "spectral_time": matched_time,
@@ -791,13 +863,13 @@ def collocate_spectrum(
         **(partition_kwargs or {}),
     )
 
-    wave_regime = classify_wave_regime(
+    diagnostics = compute_wave_regime_diagnostics(
         partitioned,
         **(regime_kwargs or {}),
     )
 
     return {
-        "wave_regime": wave_regime,
+        **diagnostics,
         "spectral_point_index": point_index,
         "spectral_distance_m": distance_m,
         "spectral_time": matched_time,
@@ -861,21 +933,17 @@ def collocate_spectra(
     npoints = len(lons)
 
     wave_regime = np.full(npoints, np.nan)
+    wind_sea_fraction = np.full(npoints, np.nan)
+    n_wave_systems = np.full(npoints, np.nan)
+    hs_total = np.full(npoints, np.nan)
     point_index = np.full(npoints, -1, dtype=int)
     distance_m = np.full(npoints, np.nan)
     time_difference_s = np.full(npoints, np.nan)
 
-    spectral_times = np.empty(
-        npoints,
-        dtype="datetime64[ns]",
-    )
+    spectral_times = np.empty(npoints, dtype="datetime64[ns]")
 
     for i in range(npoints):
-        logger.debug(
-            "Spectral collocation %d/%d",
-            i + 1,
-            npoints,
-        )
+        logger.debug("Spectral collocation %d/%d", i + 1, npoints)
 
         result = collocate_spectrum(
             ds,
@@ -887,15 +955,19 @@ def collocate_spectra(
         )
 
         wave_regime[i] = result["wave_regime"]
+        wind_sea_fraction[i] = result["wind_sea_fraction"]
+        n_wave_systems[i] = result["n_wave_systems"]
+        hs_total[i] = result["hs_total"]
         point_index[i] = result["spectral_point_index"]
         distance_m[i] = result["spectral_distance_m"]
-        time_difference_s[i] = result[
-            "spectral_time_difference_s"
-        ]
+        time_difference_s[i] = result["spectral_time_difference_s"]
         spectral_times[i] = result["spectral_time"]
 
     return {
         "wave_regime": wave_regime,
+        "wind_sea_fraction": wind_sea_fraction,
+        "n_wave_systems": n_wave_systems,
+        "hs_total": hs_total,
         "spectral_point_index": point_index,
         "spectral_distance_m": distance_m,
         "spectral_time": spectral_times,
