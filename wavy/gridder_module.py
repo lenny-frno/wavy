@@ -232,6 +232,39 @@ class gridder_class:
                 date_value = scalar_value
         return str(date_value)
 
+    @staticmethod
+    def _estimate_projected_aspect(
+        lonmin, lonmax, latmin, latmax, projection, data_crs
+    ):
+        """Estimate width/height aspect in projection coordinates."""
+        try:
+            lons = np.linspace(lonmin, lonmax, 64)
+            lats = np.linspace(latmin, latmax, 64)
+            edge_lons = np.concatenate(
+                [lons, lons, np.full_like(lats, lonmin), np.full_like(lats, lonmax)]
+            )
+            edge_lats = np.concatenate(
+                [np.full_like(lons, latmin), np.full_like(lons, latmax), lats, lats]
+            )
+            pts = projection.transform_points(data_crs, edge_lons, edge_lats)
+            x = pts[:, 0]
+            y = pts[:, 1]
+            finite = np.isfinite(x) & np.isfinite(y)
+            if np.any(finite):
+                x = x[finite]
+                y = y[finite]
+                xspan = np.nanmax(x) - np.nanmin(x)
+                yspan = np.nanmax(y) - np.nanmin(y)
+                if xspan > 0 and yspan > 0:
+                    return float(xspan / yspan)
+        except Exception:
+            pass
+
+        lat_mid = 0.5 * (latmin + latmax)
+        lon_span = abs(lonmax - lonmin) * max(np.cos(np.deg2rad(lat_mid)), 1e-3)
+        lat_span = max(abs(latmax - latmin), 1e-6)
+        return float(lon_span / lat_span)
+
     def grid_view(self, metric, mask_metric_llim, mask_metric, **kwargs):
         import cartopy.crs as ccrs
         import cartopy.feature as cfeature
@@ -239,8 +272,6 @@ class gridder_class:
         import matplotlib.pyplot as plt
         import matplotlib.cm as mplcm
         import matplotlib as mpl
-        from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-        import math
         from copy import deepcopy
         from matplotlib.colors import BoundaryNorm
 
@@ -324,12 +355,27 @@ class gridder_class:
             facecolor=cfeature.COLORS["land"],
         )
 
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1, projection=projection)
+        map_rect = kwargs.get("map_rect", [0.08, 0.12, 0.72, 0.78])
+        cbar_pad = kwargs.get("cbar_pad", 0.02)
+        cbar_width = kwargs.get("cbar_width", 0.03)
+        projected_aspect = self._estimate_projected_aspect(
+            lonmin, lonmax, latmin, latmax, projection, data_crs
+        )
+        aspect_limited = np.clip(projected_aspect, 0.45, 2.8)
+        base_height = kwargs.get("fig_height", 6.0)
+        auto_fig_width = (
+            base_height * aspect_limited * (map_rect[2] / max(map_rect[3], 1e-6))
+        )
+        fig_width = kwargs.get("fig_width", float(np.clip(auto_fig_width, 7.0, 14.0)))
+        figsize = kwargs.get("figsize", (fig_width, base_height))
+
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_axes(map_rect, projection=projection)
         # add land
         ax.add_feature(land, edgecolor="black", linewidth=1)
 
         ax.set_extent([lonmin, lonmax, latmin, latmax], crs=data_crs)
+        ax.set_aspect(kwargs.get("map_aspect", "auto"))
         pc = ax.pcolormesh(
             lon_grid,
             lat_grid,
@@ -341,28 +387,18 @@ class gridder_class:
             vmin=vmin,
         )
 
-        axins = inset_axes(
-            ax,
-            width="5%",  # width = 5% of parent_bbox width
-            height="100%",  # height : 50%
-            loc="lower left",
-            bbox_to_anchor=(1.01, 0.0, 1, 1),
-            bbox_transform=ax.transAxes,
-            borderpad=0,
+        cax = fig.add_axes(
+            [map_rect[0] + map_rect[2] + cbar_pad, map_rect[1], cbar_width, map_rect[3]]
         )
 
         metric_name = validation_metric_abbreviations[metric].get("name")
         metric_units = validation_metric_abbreviations[metric].get("units", self.units)
-        cbar = fig.colorbar(
-            pc,
-            cax=axins,
-            label=(
-                metric_name
-                if metric_units is None
-                else f"{metric_name} [{metric_units}]"
-            ),
-            ticks=levels,
-        )
+        if metric_units is None:
+            cbar = fig.colorbar(pc, cax=cax, label=metric_name)
+        else:
+            cbar = fig.colorbar(
+                pc, cax=cax, label=metric_name + " [" + metric_units + "]"
+            )
 
         # ax.coastlines()
         gl = ax.gridlines(
@@ -375,7 +411,6 @@ class gridder_class:
         )
         gl.top_labels = False
         gl.right_labels = False
-        plt.subplots_adjust(bottom=0.1, right=0.8, top=0.9)
         autotitle = (
             "Base variable: "
             + self.varalias
