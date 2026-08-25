@@ -255,6 +255,7 @@ class gridder_class():
         val_grid[mask_llim_idx[0], mask_llim_idx[1]] = np.nan
 
         projection = kwargs.get('projection', ccrs.PlateCarree())
+        data_crs = kwargs.get('data_crs', ccrs.PlateCarree())
         # parse kwargs
         if kwargs.get('cmap') is None:
             cmap = cmocean.cm.amp
@@ -292,16 +293,12 @@ class gridder_class():
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1, projection=projection)
         # add land
-        ax.add_geometries(land.intersecting_geometries(
-                    [-180, 180, 0, 90]),
-                    ccrs.PlateCarree(),
-                    facecolor=cfeature.COLORS['land'],
-                    edgecolor='black', linewidth=1)
+        ax.add_feature(land, edgecolor='black', linewidth=1)
 
-        ax.set_extent([lonmin, lonmax, latmin, latmax], crs=projection)
+        ax.set_extent([lonmin, lonmax, latmin, latmax], crs=data_crs)
         pc = ax.pcolormesh(
                 lon_grid, lat_grid, val_grid,
-                transform=projection, cmap=cmap,
+                transform=data_crs, cmap=cmap,
                 vmax=vmax, vmin=vmin)
 
         axins = inset_axes(ax,
@@ -324,7 +321,7 @@ class gridder_class():
                                 + ' [' + metric_units + ']')
 
         # ax.coastlines()
-        gl = ax.gridlines(draw_labels=True, crs=projection,
+        gl = ax.gridlines(draw_labels=True, crs=data_crs,
                           linewidth=1, color='grey', alpha=0.4,
                           linestyle='-')
         gl.top_labels = False
