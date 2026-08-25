@@ -265,24 +265,45 @@ class gridder_class:  # why not make a subclass of quicklook_class?
 
         projection = kwargs.get("projection", ccrs.PlateCarree())
         data_crs = kwargs.get("data_crs", ccrs.PlateCarree())
+        norm = kwargs.get("norm")
+
+        metric_meta = validation_metric_abbreviations.get(metric, {})
+        metric_name = metric_meta.get("name", metric)
+        is_bias_metric = (
+            "bias" in str(metric).lower() or "bias" in str(metric_name).lower()
+        )
+
         # parse kwargs
-        cmap = kwargs.get("cmap", cmocean.cm.amp)
+        if kwargs.get("cmap") is None:
+            if is_bias_metric:
+                cmap = getattr(cmocean.cm, "balance", None)
+                if cmap is None:
+                    cmap = mplcm.get_cmap("RdBu_r")
+            else:
+                cmap = cmocean.cm.amp
+        else:
+            cmap = kwargs.get("cmap")
+
+        if norm is None and is_bias_metric:
+            finite_vals = val_grid[np.isfinite(val_grid)]
+            if finite_vals.size > 0:
+                absmax = np.nanmax(np.abs(finite_vals))
+                if absmax > 0:
+                    norm = mpl.colors.TwoSlopeNorm(
+                        vmin=-absmax, vcenter=0.0, vmax=absmax
+                    )
+                else:
+                    norm = mpl.colors.CenteredNorm(vcenter=0.0)
+            else:
+                norm = mpl.colors.CenteredNorm(vcenter=0.0)
 
         # max/min for colorbar
-        vmax = kwargs.get("vmax", None)
-        vmin = kwargs.get("vmin", None)
-        norm = None
-        levels = None
-
-        if metric in ["bias", "nbias"]:
-            # default levels for bias and nbias
-            levels = np.asarray(
-                kwargs.get("bias_levels", [-1.5, -1, -0.5, -0.25, 0, 0.25, 0.5, 1, 1.5])
-            )
-            cmap = kwargs.get("bias_cmap", cmocean.cm.balance)
-            norm = kwargs.get("bias_norm", BoundaryNorm(levels, cmap.N, clip=True))
-            vmin = levels[0]
-            vmax = levels[-1]
+        vmax = kwargs.get("vmax")
+        vmin = kwargs.get("vmin")
+        if norm is not None:
+            # Matplotlib does not support passing vmin/vmax together with norm.
+            vmin = None
+            vmax = None
 
         # plot track if applicable
         if kwargs.get("lonmax") is not None:
@@ -321,6 +342,7 @@ class gridder_class:  # why not make a subclass of quicklook_class?
             val_grid,
             transform=data_crs,
             cmap=cmap,
+            norm=norm,
             vmax=vmax,
             vmin=vmin,
         )
