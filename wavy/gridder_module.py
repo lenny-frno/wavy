@@ -263,6 +263,42 @@ class gridder_class():
         lat_span = max(abs(latmax - latmin), 1e-6)
         return float(lon_span / lat_span)
 
+    @staticmethod
+    def _set_extent_projected(ax, lonmin, lonmax, latmin, latmax,
+                              projection, data_crs):
+        """Set map limits in projection coordinates to avoid lon-wrap issues."""
+        try:
+            lons = np.linspace(lonmin, lonmax, 181)
+            lats = np.linspace(latmin, latmax, 181)
+            edge_lons = np.concatenate([
+                lons,
+                lons,
+                np.full_like(lats, lonmin),
+                np.full_like(lats, lonmax)])
+            edge_lats = np.concatenate([
+                np.full_like(lons, latmin),
+                np.full_like(lons, latmax),
+                lats,
+                lats])
+            pts = projection.transform_points(data_crs, edge_lons, edge_lats)
+            x = pts[:, 0]
+            y = pts[:, 1]
+            finite = np.isfinite(x) & np.isfinite(y)
+            if np.count_nonzero(finite) < 4:
+                raise ValueError('Insufficient finite transformed boundary points')
+
+            x = x[finite]
+            y = y[finite]
+            xmin, xmax = float(np.nanmin(x)), float(np.nanmax(x))
+            ymin, ymax = float(np.nanmin(y)), float(np.nanmax(y))
+            xpad = max((xmax - xmin) * 0.01, 1.0)
+            ypad = max((ymax - ymin) * 0.01, 1.0)
+            ax.set_xlim(xmin - xpad, xmax + xpad)
+            ax.set_ylim(ymin - ypad, ymax + ypad)
+            return True
+        except Exception:
+            return False
+
     def grid_view(self, metric, mask_metric_llim, mask_metric, **kwargs):
         import cartopy.crs as ccrs
         import cartopy.feature as cfeature
@@ -369,7 +405,14 @@ class gridder_class():
         # add land
         ax.add_feature(land, edgecolor='black', linewidth=1)
 
-        ax.set_extent([lonmin, lonmax, latmin, latmax], crs=data_crs)
+        use_projected_extent = kwargs.get('use_projected_extent', True)
+        if use_projected_extent:
+            extent_set = self._set_extent_projected(
+                ax, lonmin, lonmax, latmin, latmax, projection, data_crs)
+            if not extent_set:
+                ax.set_extent([lonmin, lonmax, latmin, latmax], crs=data_crs)
+        else:
+            ax.set_extent([lonmin, lonmax, latmin, latmax], crs=data_crs)
         ax.set_aspect(kwargs.get('map_aspect', 'auto'))
         pc = ax.pcolormesh(
                 lon_grid, lat_grid, val_grid,
