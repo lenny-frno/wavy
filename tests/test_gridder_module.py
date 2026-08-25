@@ -63,6 +63,28 @@ def test_gridder_filters_points_just_below_lower_bound():
     assert np.array_equal(gco.ovals_clean, np.array([1.0]))
 
 
+@pytest.mark.parametrize(
+    "date_input, expected",
+    [
+        (np.datetime64("2024-01-02T03:04:05"), "2024-01-02T03:04:05"),
+        (datetime(2024, 1, 2, 3, 4, 5), "2024-01-02 03:04:05"),
+        ("2024-01-02 03:04:05", "2024-01-02 03:04:05"),
+        (np.array(np.datetime64("2024-01-02T03:04:05")), "2024-01-02T03:04:05"),
+    ],
+)
+def test_format_title_date_mixed_inputs(date_input, expected):
+    assert gc._format_title_date(date_input) == expected
+
+
+def test_format_title_date_uses_data_attribute_when_present():
+    class DummyXarrayLikeDate:
+        def __init__(self, data):
+            self.data = data
+
+    date_input = DummyXarrayLikeDate(np.datetime64("2024-01-02T03:04:05"))
+    assert gc._format_title_date(date_input) == "2024-01-02T03:04:05"
+
+
 
 
 #def test_gridder_lowres(test_data, benchmark):
