@@ -39,7 +39,8 @@ dependencies = [
   "requests",
   "aiohttp",
   "dill",
-  "geopandas"
+  "geopandas",
+  "wavespectra"
   ]
 
 [project.scripts]
