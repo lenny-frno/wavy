@@ -299,6 +299,20 @@ class gridder_class():
         except Exception:
             return False
 
+    @staticmethod
+    def _debug_array_range(values):
+        arr = np.asarray(values)
+        if arr.size == 0:
+            return {'size': 0, 'min': None, 'max': None}
+        finite = np.isfinite(arr)
+        if not np.any(finite):
+            return {'size': int(arr.size), 'min': None, 'max': None}
+        arrf = arr[finite]
+        return {
+            'size': int(arr.size),
+            'min': float(np.nanmin(arrf)),
+            'max': float(np.nanmax(arrf))}
+
     def grid_view(self, metric, mask_metric_llim, mask_metric, **kwargs):
         import cartopy.crs as ccrs
         import cartopy.feature as cfeature
@@ -313,6 +327,8 @@ class gridder_class():
         raw_lat_grid = kwargs.get('lat_grid')
         lon_grid = raw_lon_grid + self.res[0]/2.
         lat_grid = raw_lat_grid + self.res[1]/2.
+        debug_plot = bool(kwargs.get('debug_plot', False))
+        logger = logging.getLogger(__name__)
 
         # backup values
         all_grid = deepcopy(kwargs.get('val_grid'))
@@ -464,8 +480,40 @@ class gridder_class():
         else:
             ax.set_title(kwargs.get('title'))
         ax.title.set_size(11)
+
+        if debug_plot:
+            debug_payload = {
+                'metric': metric,
+                'bb': self.bb,
+                'res': self.res,
+                'projection': str(projection),
+                'data_crs': str(data_crs),
+                'use_projected_extent': use_projected_extent,
+                'projected_extent_set': bool(
+                    use_projected_extent and 'extent_set' in locals() and extent_set),
+                'requested_extent_lonlat': {
+                    'lonmin': float(lonmin),
+                    'lonmax': float(lonmax),
+                    'latmin': float(latmin),
+                    'latmax': float(latmax)},
+                'raw_lon_grid': self._debug_array_range(raw_lon_grid),
+                'raw_lat_grid': self._debug_array_range(raw_lat_grid),
+                'shifted_lon_grid': self._debug_array_range(lon_grid),
+                'shifted_lat_grid': self._debug_array_range(lat_grid),
+                'figure_size_inches': tuple(float(v) for v in fig.get_size_inches()),
+                'map_rect': tuple(float(v) for v in map_rect),
+                'ax_position': tuple(float(v) for v in ax.get_position().bounds),
+                'ax_xlim': tuple(float(v) for v in ax.get_xlim()),
+                'ax_ylim': tuple(float(v) for v in ax.get_ylim()),
+                'cax_position': tuple(float(v) for v in cax.get_position().bounds)}
+
+            self.last_grid_view_debug = debug_payload
+            logger.warning('grid_view diagnostic payload: %s', debug_payload)
+
         # todo: add info on observation and model source for figure
-        plt.show()
+        if kwargs.get('show', True):
+            plt.show()
+        return fig
 
     def quicklook(self, metric='mor',
                   mask_metric_llim=10,
@@ -473,7 +521,10 @@ class gridder_class():
                   **kwargs):
 
         if metric == 'all':
+            figs = {}
             for key in kwargs['val_grid'].keys():
-                self.grid_view(key, mask_metric_llim, mask_metric, **kwargs)
+                figs[key] = self.grid_view(
+                    key, mask_metric_llim, mask_metric, **kwargs)
+            return figs
         else:
-            self.grid_view(metric, mask_metric_llim, mask_metric, **kwargs)
+            return self.grid_view(metric, mask_metric_llim, mask_metric, **kwargs)
