@@ -12,6 +12,75 @@ variable_def = load_or_default('variable_def.yaml')
 
 class gridder_class():
 
+    @staticmethod
+    def _normalize_varalias(varalias, logger):
+        if isinstance(varalias, list):
+            if len(varalias) > 1:
+                logger.warning(
+                    "Warning: gridder only expects one varalias.")
+                logger.warning(
+                    "First varalias selected as default: {}".format(
+                        varalias[0]))
+                logger.warning(
+                    "If you want to select another variable, please "
+                    + "specify with varalias argument.")
+            return varalias[0]
+        return varalias
+
+    def _assign_var_metadata_from_def(self):
+        self.units = variable_def[self.varalias].get('units')
+        self.stdvarname = variable_def[self.varalias].get('standard_name')
+
+    def _init_from_oco(self, oco):
+        self._assign_var_metadata_from_def()
+        self.olons = np.array(oco.vars['lons'].squeeze().values.ravel())
+        self.olats = np.array(oco.vars['lats'].squeeze().values.ravel())
+        self.ovals = np.array(oco.vars[self.varalias].squeeze().values.ravel())
+        self.sdate = oco.vars['time'][0]
+        self.edate = oco.vars['time'][-1]
+
+    def _init_from_cco(self, cco):
+        list_vars = list(cco.vars.variables)
+        assert 'model_' + self.varalias in list_vars,\
+                        "model_{}".format(self.varalias) +\
+                                  " is missing in " +\
+                                  "the dataset, if you would like to " +\
+                                  "validate another variable, please " +\
+                                  "specify with varalias."
+        assert 'obs_' + self.varalias in list_vars,\
+                      "obs_{}".format(self.varalias) +\
+                                  " is missing in " +\
+                                  "the dataset, if you would like to " +\
+                                  "validate another variable, please " +\
+                                  "specify with varalias."
+        self.olons = np.array(cco.vars['obs_lons'])
+        self.olats = np.array(cco.vars['obs_lats'])
+        self.ovals = np.array(cco.vars['obs_'+self.varalias])
+        self.mvals = np.array(cco.vars['model_'+self.varalias])
+        self._assign_var_metadata_from_def()
+        self.sdate = cco.vars['time'][0]
+        self.edate = cco.vars['time'][-1]
+
+    def _init_from_mco(self, mco):
+        self.olons = np.array(mco.vars.lons.squeeze().values.flatten())
+        self.olats = np.array(mco.vars.lats.squeeze().values.flatten())
+        self.ovals = np.array(
+                mco.vars[self.varalias].squeeze().values.flatten())
+        self.stdvarname = mco.stdvarname
+        self._assign_var_metadata_from_def()
+        self.sdate = mco.vars['time'][0]
+        self.edate = mco.vars['time'][-1]
+
+    def _init_from_kwargs(self, kwargs):
+        self.olons = kwargs.get('lons')
+        self.olats = kwargs.get('lats')
+        self.ovals = kwargs.get('values')
+        self.stdvarname = kwargs.get('stdvarname', None)
+        self.varalias = kwargs.get('varalias', None)
+        self.units = kwargs.get('units', None)
+        self.sdate = kwargs.get('sdate', None)
+        self.edate = kwargs.get('edate', None)
+
     def __init__(
     self, oco=None, mco=None, cco=None, bb=None, grid='lonlat', res=(1, 1),
     **kwargs):
@@ -31,91 +100,19 @@ class gridder_class():
         logger.info(" ")
         self.mvals = None
         if oco is not None:
-            self.varalias = kwargs.get('varalias', oco.varalias)
-            if isinstance(self.varalias, list):
-                if len(self.varalias) > 1:
-                    logger.warning(
-                        "Warning: gridder only expects one varalias.")
-                    logger.warning(
-                        "First varalias selected as default: {}".format(
-                           self.varalias[0]))
-                    logger.warning(
-                        "If you want to select another variable, please "\
-                          +"specify with varalias argument.")
-                self.varalias=self.varalias[0]
-            self.units = variable_def[self.varalias].get('units')
-            self.stdvarname = variable_def[self.varalias].get('standard_name')
-            self.olons = np.array(oco.vars['lons'].squeeze().values.ravel())
-            self.olats = np.array(oco.vars['lats'].squeeze().values.ravel())
-            self.ovals = np.array(oco.vars[self.varalias].squeeze().values.ravel())
-            self.sdate = oco.vars['time'][0]
-            self.edate = oco.vars['time'][-1]
+            self.varalias = self._normalize_varalias(
+                kwargs.get('varalias', oco.varalias), logger)
+            self._init_from_oco(oco)
         elif cco is not None:
-            self.varalias = kwargs.get('varalias', cco.varalias)
-            if isinstance(self.varalias, list):
-                if len(self.varalias) > 1:
-                    logger.warning(
-                        "Warning: gridder only expects one varalias.")
-                    logger.warning(
-                        "First varalias selected as default: {}".format(
-                           self.varalias[0]))
-                    logger.warning(
-                        "If you want to select another variable, please " +\
-                          "specify with varalias argument.")
-                self.varalias=self.varalias[0]
-
-            list_vars = list(cco.vars.variables)
-            assert 'model_' + self.varalias in list_vars,\
-                            "model_{}".format(self.varalias) +\
-                                      " is missing in " +\
-                                      "the dataset, if you would like to " +\
-                                      "validate another variable, please " +\
-                                      "specify with varalias."
-            assert 'obs_' + self.varalias in list_vars,\
-                          "obs_{}".format(self.varalias) +\
-                                      " is missing in " +\
-                                      "the dataset, if you would like to " +\
-                                      "validate another variable, please " +\
-                                      "specify with varalias."
-            self.olons = np.array(cco.vars['obs_lons'])
-            self.olats = np.array(cco.vars['obs_lats'])
-            self.ovals = np.array(cco.vars['obs_'+self.varalias])
-            self.mvals = np.array(cco.vars['model_'+self.varalias])
-            self.units = variable_def[self.varalias].get('units')
-            self.stdvarname = variable_def[self.varalias].get('standard_name')
-            self.sdate = cco.vars['time'][0]
-            self.edate = cco.vars['time'][-1]
+            self.varalias = self._normalize_varalias(
+                kwargs.get('varalias', cco.varalias), logger)
+            self._init_from_cco(cco)
         elif mco is not None:
-            self.varalias = kwargs.get('varalias', mco.varalias)
-            if isinstance(self.varalias, list):
-                if len(self.varalias) > 1:
-                    logger.warning(
-                        "Warning: gridder only expects one varalias.")
-                    logger.warning(
-                        "First varalias selected as default: {}".format(
-                           self.varalias[0]))
-                    logger.warning(
-                        "If you want to select another variable, please "\
-                          +"specify with varalias argument.")
-                self.varalias=self.varalias[0]
-            self.olons = np.array(mco.vars.lons.squeeze().values.flatten())
-            self.olats = np.array(mco.vars.lats.squeeze().values.flatten())
-            self.ovals = np.array(
-                    mco.vars[self.varalias].squeeze().values.flatten())
-            self.stdvarname = mco.stdvarname
-            self.units = variable_def[self.varalias].get('units')
-            self.stdvarname = variable_def[self.varalias].get('standard_name')
-            self.sdate = mco.vars['time'][0]
-            self.edate = mco.vars['time'][-1]
+            self.varalias = self._normalize_varalias(
+                kwargs.get('varalias', mco.varalias), logger)
+            self._init_from_mco(mco)
         else:
-            self.olons = kwargs.get('lons')
-            self.olats = kwargs.get('lats')
-            self.ovals = kwargs.get('values')
-            self.stdvarname = kwargs.get('stdvarname', None)
-            self.varalias = kwargs.get('varalias', None)
-            self.units = kwargs.get('units', None)
-            self.sdate = kwargs.get('sdate', None)
-            self.edate = kwargs.get('edate', None)
+            self._init_from_kwargs(kwargs)
 
         self.bb = bb
         self.res = res
