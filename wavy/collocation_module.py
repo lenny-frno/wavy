@@ -40,6 +40,10 @@ from wavy.gridder_module import gridder_class as gc
 from wavy.grid_stats import apply_metric
 from wavy.quicklookmod import quicklook_class_sat as qls
 from wavy.validationmod import validate, disp_validation
+from wavy.spectral_readers import (
+    resolve_spectral_files,
+    read_and_merge_spectral_files,
+)
 
 from wavy.errors import (
     CollocationBuildError,
@@ -961,11 +965,15 @@ class collocation_class(qls):
             int(np.isnan(dist).sum()))
         return new
 
-    def add_wave_regime(self, spectral_file, **kwargs):
+    def add_wave_regime(self, spectral_file=None, **kwargs):
         """
         Adds 'wave_regime', 'wind_sea_fraction', 'n_wave_systems' and
         'hs_total' to self.vars by collocating observations with
         unstructured wave spectra.
+
+        spectral_file:
+            optional path, glob pattern, or list of files. If omitted,
+            wavy resolves the file(s) from model_cfg using spectral templates.
 
         kwargs:
             point_dim, time_name, lon_name, lat_name : spectral coord names
@@ -976,7 +984,6 @@ class collocation_class(qls):
             max_time_difference (float): maximum allowed time difference [s]
         """
         from wavy.spectra_module import (
-            read_spectral_file,
             collocate_spectra,
         )
 
@@ -1000,7 +1007,16 @@ class collocation_class(qls):
             len(unique_times)
         )
 
-        ds = read_spectral_file(spectral_file)
+        spectral_files = resolve_spectral_files(
+            new,
+            spectral_file=spectral_file,
+            **kwargs,
+        )
+        logger.info(
+            'Resolved %d spectral file(s) for wave regime diagnostics',
+            len(spectral_files),
+        )
+        ds = read_and_merge_spectral_files(spectral_files, **kwargs)
 
         for t in unique_times:
             idx = np.where(model_times == t)[0]
