@@ -235,7 +235,7 @@ def check_if_file_is_valid(fc_date, model, leadtime, **kwargs):
             logger.info("File is available and contains requested date")
             return True
         else:
-            logger.warning("Desired date " + str(fc_date) + " is not in", fname)
+            logger.warning("Desired date %s is not in %s", fc_date, fname)
             return False
     except (FileNotFoundError, OSError) as e:
         logger.error("File is not available or does not contain requested date")
@@ -650,12 +650,12 @@ class collocation_class(qls):
                         twin=0,
                     )
 
-                logger.info(len(idx), "footprints to be collocated")
-                # make tmp obs_obj with filtered data
-                tmp_dict = {}
-                tmp_dict["time"] = self.oco.vars["time"].values[idx]
-                tmp_dict["lats"] = self.oco.vars["lats"].values[idx]
-                tmp_dict["lons"] = self.oco.vars["lons"].values[idx]
+                    logger.info("%d footprints to be collocated", len(idx))
+                    # make tmp obs_obj with filtered data
+                    tmp_dict = {}
+                    tmp_dict["time"] = self.oco.vars["time"].values[idx]
+                    tmp_dict["lats"] = self.oco.vars["lats"].values[idx]
+                    tmp_dict["lons"] = self.oco.vars["lons"].values[idx]
 
                 for v in self.varalias_obs:
                     tmp_dict[v] = self.oco.vars[v].values[idx]
@@ -941,38 +941,47 @@ class collocation_class(qls):
         from wavy.ice_module import get_dist_to_ice
 
         logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
+        log_level = str(kwargs.get("logging", "WARNING").upper())
         logger.setLevel(getattr(logging, log_level, logging.WARNING))
 
         new = deepcopy(self)
-        varalias = kwargs.get('ice_varalias', 'SIC')
-        threshold = kwargs.get('ice_threshold', 0.5)
+        varalias = kwargs.get("ice_varalias", "SIC")
+        threshold = kwargs.get("ice_threshold", 0.5)
 
-        model_times = pd.to_datetime(new.vars['model_time'].values)
+        model_times = pd.to_datetime(new.vars["model_time"].values)
         unique_times = pd.unique(model_times)
 
         dist = np.full(len(model_times), np.nan)
 
-        print('Computing distance to ice edge for',
-            len(unique_times), 'unique model time steps')
+        print(
+            "Computing distance to ice edge for",
+            len(unique_times),
+            "unique model time steps",
+        )
 
         for t in unique_times:
             idx = np.where(model_times == t)[0]
             t_dt = pd.Timestamp(t).to_pydatetime()
-            pts_lons = new.vars['obs_lons'].values[idx]
-            pts_lats = new.vars['obs_lats'].values[idx]
+            pts_lons = new.vars["obs_lons"].values[idx]
+            pts_lats = new.vars["obs_lats"].values[idx]
             d = get_dist_to_ice(
-                pts_lons, pts_lats, t_dt, new.model,
-                leadtime=new.leadtime, name=new.name,
-                varalias=varalias, threshold=threshold, **kwargs)
+                pts_lons,
+                pts_lats,
+                t_dt,
+                new.model,
+                leadtime=new.leadtime,
+                name=new.name,
+                varalias=varalias,
+                threshold=threshold,
+                **kwargs,
+            )
             dist[idx] = d
 
         new.vars = new.vars.assign({"dist_to_ice": (("time"), dist)})
         if "dist_to_ice" in variable_def:
             new.vars["dist_to_ice"].attrs = variable_def["dist_to_ice"]
 
-        print(" Number of points without ice distance:",
-            int(np.isnan(dist).sum()))
+        print(" Number of points without ice distance:", int(np.isnan(dist).sum()))
         return new
 
     def add_wave_regime(self, spectral_file=None, **kwargs):
@@ -998,12 +1007,12 @@ class collocation_class(qls):
         )
 
         logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
+        log_level = str(kwargs.get("logging", "WARNING").upper())
         logger.setLevel(getattr(logging, log_level, logging.WARNING))
 
         new = deepcopy(self)
 
-        model_times = pd.to_datetime(new.vars['model_time'].values)
+        model_times = pd.to_datetime(new.vars["model_time"].values)
         unique_times = pd.unique(model_times)
 
         npoints = len(model_times)
@@ -1013,8 +1022,8 @@ class collocation_class(qls):
         hs_total = np.full(npoints, np.nan)
 
         logger.info(
-            'Computing wave regime diagnostics for %d unique model time steps',
-            len(unique_times)
+            "Computing wave regime diagnostics for %d unique model time steps",
+            len(unique_times),
         )
 
         spectral_files = resolve_spectral_files(
@@ -1023,7 +1032,7 @@ class collocation_class(qls):
             **kwargs,
         )
         logger.info(
-            'Resolved %d spectral file(s) for wave regime diagnostics',
+            "Resolved %d spectral file(s) for wave regime diagnostics",
             len(spectral_files),
         )
         ds = read_and_merge_spectral_files(spectral_files, **kwargs)
@@ -1033,9 +1042,9 @@ class collocation_class(qls):
 
             t_dt = pd.Timestamp(t).to_pydatetime()
 
-            pts_lons = new.vars['obs_lons'].values[idx]
-            pts_lats = new.vars['obs_lats'].values[idx]
-            pts_times = np.full(len(idx), t_dt, dtype='datetime64[ns]')
+            pts_lons = new.vars["obs_lons"].values[idx]
+            pts_lats = new.vars["obs_lats"].values[idx]
+            pts_times = np.full(len(idx), t_dt, dtype="datetime64[ns]")
 
             result = collocate_spectra(
                 ds,
@@ -1045,27 +1054,31 @@ class collocation_class(qls):
                 **kwargs,
             )
 
-            wave_regime[idx] = result['wave_regime']
-            wind_sea_fraction[idx] = result['wind_sea_fraction']
-            n_wave_systems[idx] = result['n_wave_systems']
-            hs_total[idx] = result['hs_total']
+            wave_regime[idx] = result["wave_regime"]
+            wind_sea_fraction[idx] = result["wind_sea_fraction"]
+            n_wave_systems[idx] = result["n_wave_systems"]
+            hs_total[idx] = result["hs_total"]
 
         new.vars = new.vars.assign(
             {
-                'wave_regime': (('time'), wave_regime),
-                'wind_sea_fraction': (('time'), wind_sea_fraction),
-                'n_wave_systems': (('time'), n_wave_systems),
-                'hs_total': (('time'), hs_total),
+                "wave_regime": (("time"), wave_regime),
+                "wind_sea_fraction": (("time"), wind_sea_fraction),
+                "n_wave_systems": (("time"), n_wave_systems),
+                "hs_total": (("time"), hs_total),
             }
         )
 
-        for varname in ('wave_regime', 'wind_sea_fraction', 'n_wave_systems', 'hs_total'):
+        for varname in (
+            "wave_regime",
+            "wind_sea_fraction",
+            "n_wave_systems",
+            "hs_total",
+        ):
             if varname in variable_def:
                 new.vars[varname].attrs = variable_def[varname]
 
         print(
-            ' Number of points without wave regime:',
-            int(np.isnan(wave_regime).sum())
+            " Number of points without wave regime:", int(np.isnan(wave_regime).sum())
         )
 
         return new
