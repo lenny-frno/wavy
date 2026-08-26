@@ -51,6 +51,8 @@ from wavy.errors import (
     CollocationInputError,
     CollocationRunError,
     ModelFileSearchError,
+    ModelFileNotFoundError,
+    ModelReadError,
 )
 
 # ---------------------------------------------------------------------#
@@ -705,11 +707,20 @@ class collocation_class(qls):
                         pass
                     if "results_dict_tmp" in locals():
                         del results_dict_tmp
-            except (ValueError, FileNotFoundError, OSError) as e:
+            except (
+                ValueError,
+                FileNotFoundError,
+                OSError,
+                ModelFileNotFoundError,
+                ModelReadError,
+            ) as e:
                 # ValueError, pass if no collocation
                 # FileNotFoundError, pass if file not accessible
                 # OSError, pass if file not accessible from thredds
-                logger.warning("Skipping fc_date=" + str(fc_date[i]) + ": " + str(e))
+                # ModelFileNotFoundError/ModelReadError can occur for a
+                # requested timestamp that is absent from an otherwise
+                # readable file. Continue with the remaining timestamps.
+                logger.warning("Skipping fc_date=%s: %s", fc_date[i], e)
                 logger.debug(e, exc_info=True)
                 n_dates_failed += 1
             except Exception as e:
