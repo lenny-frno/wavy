@@ -18,6 +18,11 @@
 #        ...
 #    coords:
 #    wavy_input:
+#    spectral_input:   # optional, used by collocation add_wave_regime
+#        src_tmplt:    # e.g. /path/to/model/%Y%m/
+#        fl_tmplt:     # e.g. ww3.%Y%m_spec.nc
+#        # alternatively use a single full-path template:
+#        # path_tmplt: /path/to/model/%Y%m/ww3.%Y%m_spec.nc
 #    reader:
 #    collector:
 #    misc:
