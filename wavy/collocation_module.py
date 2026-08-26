@@ -712,6 +712,16 @@ class collocation_class(qls):
                 logger.warning("Skipping fc_date=" + str(fc_date[i]) + ": " + str(e))
                 logger.debug(e, exc_info=True)
                 n_dates_failed += 1
+            except Exception as e:
+                raise CollocationRunError(
+                    "Collocation failed for forecast date="
+                    + str(fc_date[i])
+                    + ", model="
+                    + str(self.model)
+                    + ", storm="
+                    + str(self.name)
+                    + "."
+                ) from e
         if len(fc_date) > 0 and n_dates_failed == len(fc_date):
             raise CollocationRunError(
                 "None of the " + str(len(fc_date)) + " candidate "
