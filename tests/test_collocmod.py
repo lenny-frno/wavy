@@ -14,6 +14,7 @@ from wavy.errors import (
     CollocationBuildError,
     CollocationRunError,
     ModelFileSearchError,
+    ModelReadError,
 )
 
 # include possibility for collocating different variable
@@ -364,6 +365,27 @@ def test_collocate_track_all_dates_failed_raises(monkeypatch):
         raise ValueError("simulated: no collocation possible")
 
     monkeypatch.setattr(cc, "_collocate_field", broken_collocate_field)
+
+    with pytest.raises(CollocationRunError, match="could be collocated"):
+        cco.populate()
+
+
+def test_collocate_track_skips_unavailable_model_timestamps(monkeypatch):
+    """A missing timestamp in an otherwise readable model file is skippable."""
+    ico = ic(
+        nID="D_Breisundet_wave",
+        sd="2024-01-01 10",
+        ed="2024-01-01 19",
+        varalias="Hs",
+        name="wavescan",
+        twin=30,
+    ).populate()
+    cco = cc(oco=ico, model="ww3_4km", leadtime=10, twin=9)
+
+    def unavailable_timestamp(self, **kwargs):
+        raise ModelReadError("requested timestamp is not in the file")
+
+    monkeypatch.setattr(mc, "populate", unavailable_timestamp)
 
     with pytest.raises(CollocationRunError, match="could be collocated"):
         cco.populate()
