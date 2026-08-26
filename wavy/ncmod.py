@@ -410,8 +410,9 @@ def get_filevarname(varalias, variable_info, srcdict, ncdict, **kwargs):
     logger.setLevel(getattr(logging, log_level, logging.WARNING))
 
     stdname = variable_info[varalias]['standard_name']
-    logger.info(' Get filevarname for \n' + 'stdvarname:', stdname,
-                '\n' + 'varalias:', varalias)
+    logger.info(
+        "Get filevarname for stdvarname=%s, varalias=%s", stdname, varalias
+    )
     filevarname = get_varname_for_cf_stdname_in_ncfile(ncdict, stdname)
     if (filevarname is None and 'alias' in variable_info[varalias]):
         filevarname = get_varname_for_cf_stdname_in_ncfile(
@@ -432,7 +433,7 @@ def get_filevarname(varalias, variable_info, srcdict, ncdict, **kwargs):
     if (filevarname is None and varalias in vardefdict.keys()):
         filevarname = vardefdict[varalias]
         logger.info(' Variable defined in *_cfg.yaml is:')
-        logger.info(varalias, '=', filevarname)
+        logger.info("%s = %s", varalias, filevarname)
         return filevarname
     else:
         logger.warning(' !!! variable not defined nor ' +

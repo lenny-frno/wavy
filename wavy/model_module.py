@@ -844,7 +844,7 @@ class model_class(qls):
                 logger.info(" ## Summary:")
                 logger.info(str(len(self.vars["time"])) + " time steps retrieved.")
                 logger.info("Time used for retrieving data:")
-                logger.info(round(t1 - t0, 2), "seconds")
+                logger.info("%s seconds", round(t1 - t0, 2))
                 logger.info(" ")
                 logger.info(" ### model_class object populated ###")
                 logger.info("# ----- ")

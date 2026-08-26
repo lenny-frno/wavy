@@ -235,7 +235,7 @@ def check_if_file_is_valid(fc_date, model, leadtime, **kwargs):
             logger.info("File is available and contains requested date")
             return True
         else:
-            logger.warning("Desired date " + str(fc_date) + " is not in", fname)
+            logger.warning("Desired date %s is not in %s", fc_date, fname)
             return False
     except (FileNotFoundError, OSError) as e:
         logger.error("File is not available or does not contain requested date")
@@ -650,7 +650,7 @@ class collocation_class(qls):
                             twin=0,
                         )
 
-                    logger.info(len(idx), "footprints to be collocated")
+                    logger.info("%d footprints to be collocated", len(idx))
                     # make tmp obs_obj with filtered data
                     tmp_dict = {}
                     tmp_dict["time"] = self.oco.vars["time"].values[idx]
