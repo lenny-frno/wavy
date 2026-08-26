@@ -113,7 +113,6 @@ class SatelliteError(WavyError):
     pass
 
 
-<<<<<<< HEAD
 class SatellitePathTemplateError(ConfigError):
     """
     Raised when building a filesystem path from a satellite's
