@@ -940,14 +940,23 @@ class collocation_class(qls):
         """
         Adds 'dist_to_ice' (meters) to self.vars: the distance from
         each collocated observation point to the nearest ice edge in the
-        model's SIC field, computed once per unique model_time to avoid
-        redundant fetches.
+        model's SIC field.
+
+        Ice fields are fetched once per time bucket of width
+        ``ice_time_step`` hours (default 12).  All observations whose
+        model_time falls inside the same bucket reuse the same ice
+        field, which drastically reduces the number of model fetches
+        when the dataset spans many hours.
 
         kwargs:
             ice_varalias (str): varalias for ice concentration in
                                 model_cfg.yaml's vardef (default 'SIC')
             ice_threshold (float): concentration defining the edge
                                 (default 0.5)
+            ice_time_step (int|float): bucket width in hours; the ice
+                                field is fetched once per bucket and
+                                treated as static within that window.
+                                Common choices: 1, 6, 12 (default 12).
         """
         from wavy.ice_module import get_dist_to_ice
 
@@ -958,18 +967,25 @@ class collocation_class(qls):
         new = deepcopy(self)
         varalias = kwargs.get('ice_varalias', 'SIC')
         threshold = kwargs.get('ice_threshold', 0.5)
+        ice_time_step = int(kwargs.get('ice_time_step', 12))
 
         model_times = pd.to_datetime(new.vars['model_time'].values)
-        unique_times = pd.unique(model_times)
+
+        # Floor each model_time to the nearest ice_time_step-hour boundary
+        # so that observations within the same bucket share one ice fetch.
+        bucketed_times = model_times.floor(f'{ice_time_step}h')
+        unique_buckets = pd.unique(bucketed_times)
 
         dist = np.full(len(model_times), np.nan)
 
         print('Computing distance to ice edge for',
-            len(unique_times), 'unique model time steps')
+            len(unique_buckets), 'ice time buckets',
+            f'(ice_time_step={ice_time_step}h,',
+            len(pd.unique(model_times)), 'unique model times)')
 
-        for t in unique_times:
-            idx = np.where(model_times == t)[0]
-            t_dt = pd.Timestamp(t).to_pydatetime()
+        for t_bucket in unique_buckets:
+            idx = np.where(bucketed_times == t_bucket)[0]
+            t_dt = pd.Timestamp(t_bucket).to_pydatetime()
             pts_lons = new.vars['obs_lons'].values[idx]
             pts_lats = new.vars['obs_lats'].values[idx]
             d = get_dist_to_ice(
