@@ -1038,6 +1038,7 @@ class collocation_class(qls):
         wind_sea_fraction = np.full(npoints, np.nan)
         n_wave_systems = np.full(npoints, np.nan)
         hs_total = np.full(npoints, np.nan)
+        peak_frequency_hz = np.full(npoints, np.nan)
 
         logger.info(
             'Computing wave regime diagnostics for %d unique model time steps',
@@ -1076,6 +1077,7 @@ class collocation_class(qls):
             wind_sea_fraction[idx] = result['wind_sea_fraction']
             n_wave_systems[idx] = result['n_wave_systems']
             hs_total[idx] = result['hs_total']
+            peak_frequency_hz[idx] = result['peak_frequency_hz']
 
         new.vars = new.vars.assign(
             {
@@ -1083,10 +1085,11 @@ class collocation_class(qls):
                 'wind_sea_fraction': (('time'), wind_sea_fraction),
                 'n_wave_systems': (('time'), n_wave_systems),
                 'hs_total': (('time'), hs_total),
+                'peak_frequency_hz': (('time'), peak_frequency_hz),
             }
         )
 
-        for varname in ('wave_regime', 'wind_sea_fraction', 'n_wave_systems', 'hs_total'):
+        for varname in ('wave_regime', 'wind_sea_fraction', 'n_wave_systems', 'hs_total', 'peak_frequency_hz'):
             if varname in variable_def:
                 new.vars[varname].attrs = variable_def[varname]
 
