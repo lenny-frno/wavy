@@ -469,6 +469,45 @@ def find_nearest_spectral_time(ds, target_time, time_name=None):
 # ---------------------------------------------------------------------#
 # Spectral extraction
 # ---------------------------------------------------------------------#
+def compute_spectrum_peak_frequency(spectrum):
+    """
+    Compute peak frequency (Hz) of the whole 2D spectrum.
+
+    The whole spectrum is reduced to 1D by summing efth over direction,
+    then selecting the frequency with maximum energy.
+    """
+    if "efth" not in spectrum:
+        raise KeyError("Spectrum Dataset must contain 'efth'.")
+
+    efth = spectrum["efth"]
+
+    if "freq" not in efth.dims or "dir" not in efth.dims:
+        raise ValueError(
+            "Spectrum 'efth' must have (freq, dir) dimensions to compute "
+            f"peak frequency. Got {efth.dims}"
+        )
+
+    if "freq" not in efth.coords:
+        raise ValueError("Spectrum 'efth' has no 'freq' coordinate.")
+
+    energy_1d = efth.sum(dim="dir", skipna=True)
+    values = np.asarray(energy_1d.values).squeeze()
+    freqs = np.asarray(energy_1d["freq"].values).squeeze()
+
+    if values.ndim != 1 or freqs.ndim != 1:
+        raise ValueError(
+            "Peak-frequency computation expects 1D arrays after reducing direction."
+        )
+
+    mask = np.isfinite(values) & np.isfinite(freqs)
+    if not np.any(mask):
+        return np.nan
+
+    values_valid = values[mask]
+    freqs_valid = freqs[mask]
+    idx = int(np.nanargmax(values_valid))
+    return float(freqs_valid[idx])
+
 
 def extract_point_spectrum(
     ds,
@@ -799,6 +838,7 @@ def collocate_spectrum(
             "wind_sea_fraction": np.nan,
             "n_wave_systems": np.nan,
             "hs_total": np.nan,
+            "peak_frequency_hz": np.nan,
             "spectral_point_index": point_index,
             "spectral_distance_m": distance_m,
             "spectral_time": matched_time,
@@ -812,6 +852,8 @@ def collocate_spectrum(
         point_dim=point_dim,
         time_name=time_name,
     )
+
+    peak_frequency_hz = compute_spectrum_peak_frequency(spectrum)
 
     partitioned = partition_spectrum(
         spectrum,
@@ -830,6 +872,7 @@ def collocate_spectrum(
         "spectral_distance_m": distance_m,
         "spectral_time": matched_time,
         "spectral_time_difference_s": time_difference,
+        "peak_frequency_hz": peak_frequency_hz,
     }
 
 
@@ -935,6 +978,7 @@ def collocate_spectra(
     point_index = np.full(npoints, -1, dtype=int)
     distance_m = np.full(npoints, np.nan)
     time_difference_s = np.full(npoints, np.nan)
+    peak_frequency_hz = np.full(npoints, np.nan)
 
     spectral_times = np.empty(npoints, dtype="datetime64[ns]")
 
@@ -948,6 +992,7 @@ def collocate_spectra(
             "spectral_distance_m": distance_m,
             "spectral_time": spectral_times,
             "spectral_time_difference_s": time_difference_s,
+            "peak_frequency_hz": peak_frequency_hz,
         }
         if return_profiling:
             result["profiling"] = {
@@ -1005,6 +1050,7 @@ def collocate_spectra(
         wind_fraction_by_pair = np.full(len(unique_pairs), np.nan)
         n_systems_by_pair = np.full(len(unique_pairs), np.nan)
         hs_total_by_pair = np.full(len(unique_pairs), np.nan)
+        peak_frequency_by_pair = np.full(len(unique_pairs), np.nan)
 
         for pair_i, (ti, pi) in enumerate(unique_pairs):
             logger.debug(
@@ -1022,6 +1068,8 @@ def collocate_spectra(
                 point_dim=point_dim,
                 time_name=time_name,
             )
+
+            peak_frequency_by_pair[pair_i] = compute_spectrum_peak_frequency(spectrum)
 
             partitioned = partition_spectrum(
                 spectrum,
@@ -1044,6 +1092,7 @@ def collocate_spectra(
         wind_sea_fraction[valid_indices] = wind_fraction_by_pair[mapped_pair_idx]
         n_wave_systems[valid_indices] = n_systems_by_pair[mapped_pair_idx]
         hs_total[valid_indices] = hs_total_by_pair[mapped_pair_idx]
+        peak_frequency_hz[valid_indices] = peak_frequency_by_pair[mapped_pair_idx]
     else:
         unique_pairs = np.empty((0, 2), dtype=int)
 
@@ -1058,6 +1107,7 @@ def collocate_spectra(
         "spectral_distance_m": distance_m,
         "spectral_time": spectral_times,
         "spectral_time_difference_s": time_difference_s,
+        "peak_frequency_hz": peak_frequency_hz,
     }
 
     if return_profiling:
