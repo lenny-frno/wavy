@@ -508,6 +508,50 @@ def compute_spectrum_peak_frequency(spectrum):
     idx = int(np.nanargmax(values_valid))
     return float(freqs_valid[idx])
 
+def compute_spectrum_direction_diagnostics(spectrum, partitioned=None):
+    """
+    Compute wind direction, whole-spectrum mean direction, and
+    per-partition mean direction.
+
+    Returns
+    -------
+    dict
+        spectral_wind_dir_deg : float
+        spectral_mean_direction_deg : float
+        partition_mean_direction_deg : numpy.ndarray
+    """
+    if "efth" not in spectrum:
+        raise KeyError("Spectrum Dataset must contain 'efth'.")
+
+    spectral_wind_dir_deg = np.nan
+    if "wdir" in spectrum:
+        wdir_values = np.asarray(spectrum["wdir"].values).squeeze()
+        if np.size(wdir_values) > 0 and np.any(np.isfinite(wdir_values)):
+            spectral_wind_dir_deg = float(
+                np.ravel(wdir_values)[np.flatnonzero(np.isfinite(wdir_values))[0]]
+            )
+
+    stats = spectrum.spec.stats(["dm"])
+    dm_values = np.asarray(stats["dm"].values).squeeze()
+    if np.size(dm_values) == 0 or not np.any(np.isfinite(dm_values)):
+        spectral_mean_direction_deg = np.nan
+    else:
+        spectral_mean_direction_deg = float(
+            np.ravel(dm_values)[np.flatnonzero(np.isfinite(dm_values))[0]]
+        )
+
+    partition_mean_direction_deg = np.array([], dtype=float)
+    if partitioned is not None:
+        part_stats = partitioned.spec.stats(["dm"])
+        part_dm = np.asarray(part_stats["dm"].values).squeeze()
+        part_dm = np.atleast_1d(part_dm).astype(float)
+        partition_mean_direction_deg = part_dm
+
+    return {
+        "spectral_wind_dir_deg": spectral_wind_dir_deg,
+        "spectral_mean_direction_deg": spectral_mean_direction_deg,
+        "partition_mean_direction_deg": partition_mean_direction_deg,
+    }
 
 def extract_point_spectrum(
     ds,
@@ -839,6 +883,9 @@ def collocate_spectrum(
             "n_wave_systems": np.nan,
             "hs_total": np.nan,
             "peak_frequency_hz": np.nan,
+            "spectral_wind_dir_deg": np.nan,
+            "spectral_mean_direction_deg": np.nan,
+            "partition_mean_direction_deg": np.array([], dtype=float),
             "spectral_point_index": point_index,
             "spectral_distance_m": distance_m,
             "spectral_time": matched_time,
@@ -861,6 +908,11 @@ def collocate_spectrum(
         **(partition_kwargs or {}),
     )
 
+    direction_diagnostics = compute_spectrum_direction_diagnostics(
+        spectrum,
+        partitioned=partitioned,
+    )
+
     diagnostics = compute_wave_regime_diagnostics(
         partitioned,
         **(regime_kwargs or {}),
@@ -868,11 +920,12 @@ def collocate_spectrum(
 
     return {
         **diagnostics,
+        "peak_frequency_hz": peak_frequency_hz,
+        **direction_diagnostics,
         "spectral_point_index": point_index,
         "spectral_distance_m": distance_m,
         "spectral_time": matched_time,
         "spectral_time_difference_s": time_difference,
-        "peak_frequency_hz": peak_frequency_hz,
     }
 
 
@@ -979,6 +1032,12 @@ def collocate_spectra(
     distance_m = np.full(npoints, np.nan)
     time_difference_s = np.full(npoints, np.nan)
     peak_frequency_hz = np.full(npoints, np.nan)
+    spectral_wind_dir_deg = np.full(npoints, np.nan)
+    spectral_mean_direction_deg = np.full(npoints, np.nan)
+    partition_mean_direction_deg = np.empty(npoints, dtype=object)
+    partition_mean_direction_deg[:] = [
+        np.array([], dtype=float) for _ in range(npoints)
+    ]
 
     spectral_times = np.empty(npoints, dtype="datetime64[ns]")
 
@@ -993,6 +1052,9 @@ def collocate_spectra(
             "spectral_time": spectral_times,
             "spectral_time_difference_s": time_difference_s,
             "peak_frequency_hz": peak_frequency_hz,
+            "spectral_wind_dir_deg": spectral_wind_dir_deg,
+            "spectral_mean_direction_deg": spectral_mean_direction_deg,
+            "partition_mean_direction_deg": partition_mean_direction_deg,
         }
         if return_profiling:
             result["profiling"] = {
@@ -1051,7 +1113,12 @@ def collocate_spectra(
         n_systems_by_pair = np.full(len(unique_pairs), np.nan)
         hs_total_by_pair = np.full(len(unique_pairs), np.nan)
         peak_frequency_by_pair = np.full(len(unique_pairs), np.nan)
-
+        spectral_wind_dir_by_pair = np.full(len(unique_pairs), np.nan)
+        spectral_mean_direction_by_pair = np.full(len(unique_pairs), np.nan)
+        partition_mean_direction_by_pair = np.empty(len(unique_pairs), dtype=object)
+        partition_mean_direction_by_pair[:] = [
+            np.array([], dtype=float) for _ in range(len(unique_pairs))
+        ]
         for pair_i, (ti, pi) in enumerate(unique_pairs):
             logger.debug(
                 "Spectral partitioning for unique pair %d/%d (time=%d, point=%d)",
@@ -1076,10 +1143,24 @@ def collocate_spectra(
                 method=partition_method,
                 **partition_kwargs,
             )
+            direction_diagnostics = compute_spectrum_direction_diagnostics(
+                spectrum,
+                partitioned=partitioned,
+            )
 
             diagnostics = compute_wave_regime_diagnostics(
                 partitioned,
                 **regime_kwargs,
+            )
+
+            spectral_wind_dir_by_pair[pair_i] = (
+                direction_diagnostics["spectral_wind_dir_deg"]
+            )
+            spectral_mean_direction_by_pair[pair_i] = (
+                direction_diagnostics["spectral_mean_direction_deg"]
+            )
+            partition_mean_direction_by_pair[pair_i] = (
+                direction_diagnostics["partition_mean_direction_deg"]
             )
 
             regime_by_pair[pair_i] = diagnostics["wave_regime"]
@@ -1093,6 +1174,15 @@ def collocate_spectra(
         n_wave_systems[valid_indices] = n_systems_by_pair[mapped_pair_idx]
         hs_total[valid_indices] = hs_total_by_pair[mapped_pair_idx]
         peak_frequency_hz[valid_indices] = peak_frequency_by_pair[mapped_pair_idx]
+        spectral_wind_dir_deg[valid_indices] = (
+            spectral_wind_dir_by_pair[mapped_pair_idx]
+        )
+        spectral_mean_direction_deg[valid_indices] = (
+            spectral_mean_direction_by_pair[mapped_pair_idx]
+        )
+        partition_mean_direction_deg[valid_indices] = (
+            partition_mean_direction_by_pair[mapped_pair_idx]
+        )
     else:
         unique_pairs = np.empty((0, 2), dtype=int)
 
@@ -1108,6 +1198,9 @@ def collocate_spectra(
         "spectral_time": spectral_times,
         "spectral_time_difference_s": time_difference_s,
         "peak_frequency_hz": peak_frequency_hz,
+        "spectral_wind_dir_deg": spectral_wind_dir_deg,
+        "spectral_mean_direction_deg": spectral_mean_direction_deg,
+        "partition_mean_direction_deg": partition_mean_direction_deg,
     }
 
     if return_profiling:
