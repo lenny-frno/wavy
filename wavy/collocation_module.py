@@ -1039,6 +1039,12 @@ class collocation_class(qls):
         n_wave_systems = np.full(npoints, np.nan)
         hs_total = np.full(npoints, np.nan)
         peak_frequency_hz = np.full(npoints, np.nan)
+        spectral_wind_dir_deg = np.full(npoints, np.nan)
+        spectral_mean_direction_deg = np.full(npoints, np.nan)
+        partition_mean_direction_deg = np.empty(npoints, dtype=object)
+        partition_mean_direction_deg[:] = [
+            np.array([], dtype=float) for _ in range(npoints)
+        ]
 
         logger.info(
             'Computing wave regime diagnostics for %d unique model time steps',
@@ -1078,6 +1084,9 @@ class collocation_class(qls):
             n_wave_systems[idx] = result['n_wave_systems']
             hs_total[idx] = result['hs_total']
             peak_frequency_hz[idx] = result['peak_frequency_hz']
+            spectral_wind_dir_deg[idx] = result['spectral_wind_dir_deg']
+            spectral_mean_direction_deg[idx] = result['spectral_mean_direction_deg']
+            partition_mean_direction_deg[idx] = result['partition_mean_direction_deg']
 
         new.vars = new.vars.assign(
             {
@@ -1086,10 +1095,22 @@ class collocation_class(qls):
                 'n_wave_systems': (('time'), n_wave_systems),
                 'hs_total': (('time'), hs_total),
                 'peak_frequency_hz': (('time'), peak_frequency_hz),
+                'spectral_wind_dir_deg': (('time'), spectral_wind_dir_deg),
+                'spectral_mean_direction_deg': (('time'), spectral_mean_direction_deg),
+                'partition_mean_direction_deg': (('time'), partition_mean_direction_deg),
             }
         )
 
-        for varname in ('wave_regime', 'wind_sea_fraction', 'n_wave_systems', 'hs_total', 'peak_frequency_hz'):
+        for varname in (
+            'wave_regime',
+            'wind_sea_fraction',
+            'n_wave_systems',
+            'hs_total',
+            'peak_frequency_hz',
+            'spectral_wind_dir_deg',
+            'spectral_mean_direction_deg',
+            'partition_mean_direction_deg',
+        ):
             if varname in variable_def:
                 new.vars[varname].attrs = variable_def[varname]
 
