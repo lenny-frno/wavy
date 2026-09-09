@@ -160,6 +160,7 @@ def grid_stats_group(gco, **kwargs):
     SI_grid = np.full((len(glons), len(glats)), np.nan)
     nov_grid = np.full((len(glons), len(glats)), np.nan)
     mar_grid = np.full((len(glons), len(glats)), np.nan)
+    hh_grid = np.full((len(glons), len(glats)), np.nan)
 
     lat_grid, lon_grid = np.meshgrid(glats, glons)
 
@@ -207,6 +208,7 @@ def grid_stats_group(gco, **kwargs):
         nbias_grid[iy, ix] = validation_dict['nbias']
         SI_grid[iy, ix] = validation_dict['SI'][1]
         mar_grid[iy, ix] = validation_dict['mar']
+        hh_grid[iy, ix] = validation_dict['hh']
         nov_grid[iy, ix] = validation_dict['nov']
 
         pbar.update(1)
@@ -224,6 +226,7 @@ def grid_stats_group(gco, **kwargs):
             'nbias': nbias_grid,
             'SI': SI_grid,
             'mar': mar_grid,
+            'hh': hh_grid,
             'nov': nov_grid
             }
 
