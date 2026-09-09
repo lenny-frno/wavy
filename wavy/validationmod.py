@@ -69,6 +69,19 @@ def calc_drmsd(a, b):
     drmsd = np.sqrt(dmsd)
     return dmsd, drmsd
 
+def calc_hanna_heinold(a, b):
+    """
+    Hanna and Heinold indicator (HH):
+    HH = sum((model - obs)^2) / sum(model * obs)
+    if nans exist the prinziple of marginalization is applied
+    """
+    comb = a + b
+    idx = np.array(range(len(a)))[~np.isnan(comb)]
+    a1 = a[idx]
+    b1 = b[idx]
+    hh_square = np.sum((a1 - b1) ** 2) / np.sum(a1 * b1)
+    return np.sqrt(hh_square)
+
 def calc_scatter_index(model, obs):
     '''
     Scatter index based on rmse and on std of diff
@@ -153,6 +166,7 @@ def disp_validation(valid_dict):
     print('Normalized Bias: ' + '{:0.2f}'.format(valid_dict['nbias']))
     print('Scatter Index: ' + '{:0.2f}'.format(valid_dict['SI'][1]))
     print('Model Activity Ratio: ' + '{:0.2f}'.format(valid_dict['mar']))
+    print('Hanna and Heinold Indicator: ' + '{:0.2f}'.format(valid_dict['hh']))
     print('Mean of Model: ' + '{:0.2f}'.format(valid_dict['mop']))
     print('Mean of Observations: ' + '{:0.2f}'.format(valid_dict['mor']))
     print('Number of Collocated Values: ' + str(valid_dict['nov']))
@@ -193,6 +207,7 @@ def validate(results_dict, boot=None):
         nbias = calc_nbias(model_matches, obs_matches)
         SI = calc_scatter_index(model_matches, obs_matches)
         mar = calc_model_activity_ratio(model_matches, obs_matches)
+        hh = calc_hanna_heinold(model_matches, obs_matches)
         validation_dict = {
             'mop': mop,
             'mor': mor,
@@ -206,7 +221,9 @@ def validate(results_dict, boot=None):
             'bias': bias,
             'nbias': nbias,
             'SI': SI,
-            'mar': mar}
+            'mar': mar,
+            'hh': hh,
+            }
     elif boot is True:
         from wavy.utils import bootstr, marginalize
         reps = 1000
