@@ -262,6 +262,57 @@ def get_nc_thredds(**kwargs):
     return var_sliced
 
 
+def _coord_to_timeseries(values, ntime):
+    arr = np.asarray(values)
+
+    if arr.ndim == 0:
+        return np.full(ntime, float(arr), dtype='f')
+
+    if arr.ndim == 1 and len(arr) == ntime:
+        return arr.astype('f')
+
+    if arr.size > 0:
+        return np.full(ntime, float(arr.ravel()[0]), dtype='f')
+
+    return np.full(ntime, np.nan, dtype='f')
+
+
+def _extract_coord(ds_sliced, coord_name, attr_name, cfg, station_name, timestr):
+    ntime = ds_sliced[timestr].size
+
+    candidates = []
+    if coord_name is not None:
+        candidates.append(coord_name)
+
+    if attr_name == 'longitude':
+        candidates += ['lons', 'lon', 'longitude', 'LONGITUDE', 'LON']
+    elif attr_name == 'latitude':
+        candidates += ['lats', 'lat', 'latitude', 'LATITUDE', 'LAT']
+
+    # 1) variable/coord in dataset
+    for cand in candidates:
+        if cand in ds_sliced.variables or cand in ds_sliced.coords:
+            return _coord_to_timeseries(ds_sliced[cand].values, ntime)
+
+    # 2) global attrs in dataset
+    for cand in [attr_name, attr_name.upper(), attr_name.capitalize()]:
+        if cand in ds_sliced.attrs:
+            return _coord_to_timeseries(ds_sliced.attrs[cand], ntime)
+
+    # 3) coords from config, if present
+    try:
+        cfg_coords = cfg.get('misc', {}).get('coords', {})
+        if station_name in cfg_coords and attr_name[:3] in cfg_coords[station_name]:
+            return np.full(ntime, float(cfg_coords[station_name][attr_name[:3]]), dtype='f')
+        if station_name in cfg_coords and attr_name in cfg_coords[station_name]:
+            return np.full(ntime, float(cfg_coords[station_name][attr_name]), dtype='f')
+    except Exception:
+        pass
+
+    # 4) fallback
+    return np.full(ntime, np.nan, dtype='f')
+
+
 def get_nc_thredds_static_coords(**kwargs):
     sd = kwargs.get('sd')
     ed = kwargs.get('ed')
@@ -271,46 +322,43 @@ def get_nc_thredds_static_coords(**kwargs):
     pathlst = kwargs.get('pathlst')
     cfg = vars(kwargs['cfg'])
 
-    # determine ncvarname
     meta = ncdumpMeta(pathlst[0])
-    ncvar = [get_filevarname(v, variable_def,
-                             cfg, meta) for v in varalias]
-    lonstr = get_filevarname('lons', variable_def,
-                             cfg, meta)
-    latstr = get_filevarname('lats', variable_def,
-                             cfg, meta)
-    timestr = get_filevarname('time', variable_def,
-                              cfg, meta)
+    ncvar = [get_filevarname(v, variable_def, cfg, meta) for v in varalias]
+    lonstr = get_filevarname('lons', variable_def, cfg, meta)
+    latstr = get_filevarname('lats', variable_def, cfg, meta)
+    timestr = get_filevarname('time', variable_def, cfg, meta)
 
-    # read all paths
     ds = read_netcdfs(pathlst, dim=timestr)
     ds_sort = ds.sortby(timestr)
-
     ds_sliced = ds_sort.sel({timestr: slice(sd, ed)})
 
-    # if lonstr is None try static from cfg
-    if (lonstr is None and latstr is None):
-        lons = np.ones(ds_sliced[timestr].shape)\
-                *cfg['misc']['coords'][kwargs.get('name')]['lon']
-        lats = np.ones(ds_sliced[timestr].shape)\
-                *cfg['misc']['coords'][kwargs.get('name')]['lat']
+    lons = _extract_coord(
+        ds_sliced, lonstr, 'longitude', cfg, kwargs.get('name'), timestr
+    )
+    lats = _extract_coord(
+        ds_sliced, latstr, 'latitude', cfg, kwargs.get('name'), timestr
+    )
 
     var_sliced = ds_sliced[ncvar]
+    time_data = ds_sliced[timestr].data
 
-    # combine and create dataset
     ds_combined = xr.Dataset(
         {
             varname: xr.DataArray(
                 data=var_sliced[varname].data,
                 dims=[timestr],
-                coords={timestr: var_sliced[timestr].data},
+                coords={timestr: time_data},
             )
             for varname in ncvar
         }
     )
 
-    ds_combined["lons"] = xr.DataArray(data=lons, dims=[timestr], coords={timestr: var_sliced[timestr].data})
-    ds_combined["lats"] = xr.DataArray(data=lats, dims=[timestr], coords={timestr: var_sliced[timestr].data})
+    ds_combined["lons"] = xr.DataArray(
+        data=lons, dims=[timestr], coords={timestr: time_data}
+    )
+    ds_combined["lats"] = xr.DataArray(
+        data=lats, dims=[timestr], coords={timestr: time_data}
+    )
 
     return ds_combined
 
@@ -324,47 +372,43 @@ def get_nc_thredds_static_coords_single_file(**kwargs):
     pathlst = kwargs.get('pathlst')
     cfg = vars(kwargs['cfg'])
 
-    # determine ncvarname
     meta = ncdumpMeta(pathlst[0])
-    ncvar = [get_filevarname(v, variable_def,
-                             cfg, meta) for v in varalias]
-    lonstr = get_filevarname('lons', variable_def,
-                             cfg, meta)
-    latstr = get_filevarname('lats', variable_def,
-                             cfg, meta)
-    timestr = get_filevarname('time', variable_def,
-                              cfg, meta)
+    ncvar = [get_filevarname(v, variable_def, cfg, meta) for v in varalias]
+    lonstr = get_filevarname('lons', variable_def, cfg, meta)
+    latstr = get_filevarname('lats', variable_def, cfg, meta)
+    timestr = get_filevarname('time', variable_def, cfg, meta)
 
-    # read all paths
     ds = xr.open_dataset(pathlst[0], engine='netcdf4')
     ds_sort = ds.sortby(timestr)
-
     ds_sliced = ds_sort.sel({timestr: slice(sd, ed)})
 
-    # if lonstr is None try static from cfg
-    if (lonstr is None and latstr is None):
-        lons = np.ones(ds_sliced[timestr].shape)\
-                *cfg['misc']['coords'][kwargs.get('name')]['lon']
-        lats = np.ones(ds_sliced[timestr].shape)\
-                *cfg['misc']['coords'][kwargs.get('name')]['lat']
+    lons = _extract_coord(
+        ds_sliced, lonstr, 'longitude', cfg, kwargs.get('name'), timestr
+    )
+    lats = _extract_coord(
+        ds_sliced, latstr, 'latitude', cfg, kwargs.get('name'), timestr
+    )
 
     var_sliced = ds_sliced[ncvar]
+    time_data = ds_sliced[timestr].data
 
-    # combine and create dataset
-    
     ds_combined = xr.Dataset(
         {
             varname: xr.DataArray(
                 data=var_sliced[varname].data,
                 dims=[timestr],
-                coords={timestr: var_sliced[timestr].data},
+                coords={timestr: time_data},
             )
             for varname in ncvar
         }
     )
 
-    ds_combined["lons"] = xr.DataArray(data=lons, dims=[timestr], coords={timestr: var_sliced[timestr].data})
-    ds_combined["lats"] = xr.DataArray(data=lats, dims=[timestr], coords={timestr: var_sliced[timestr].data})
+    ds_combined["lons"] = xr.DataArray(
+        data=lons, dims=[timestr], coords={timestr: time_data}
+    )
+    ds_combined["lats"] = xr.DataArray(
+        data=lats, dims=[timestr], coords={timestr: time_data}
+    )
 
     return ds_combined
 
