@@ -57,6 +57,17 @@ def check_date(filelst, date):
         idx = [0]
     return idx[0], idx[-1]
 
+def _pick_existing_name(ds, candidate):
+    if candidate is None:
+        return None
+    if isinstance(candidate, (list, tuple)):
+        for c in candidate:
+            if c in ds.variables or c in ds.coords:
+                return c
+        return None
+    if candidate in ds.variables or candidate in ds.coords:
+        return candidate
+    return None
 
 # ---------------------------------------------------------------------#
 
@@ -115,6 +126,46 @@ class insitu_class(qls, fc):
         print(" ")
         print(" ### insitu_class object initialized ### ")
         print('# ----- ')
+
+    def _change_varname_to_aliases(self, **kwargs):
+        logger = logging.getLogger(__name__)
+
+        if self.vars is None:
+            return self
+
+        cfg = vars(self.cfg)
+        rename_dict = {}
+
+        # wave vars + standard coords
+        alias_list = list(self.varalias) + ['lons', 'lats', 'time']
+
+        for alias in alias_list:
+            # already present under target alias
+            if alias in self.vars.variables or alias in self.vars.coords:
+                continue
+
+            candidate = None
+
+            # first try metadata-based lookup
+            try:
+                if self.meta is not None:
+                    candidate = get_filevarname(alias, variable_def, cfg, self.meta)
+            except Exception as e:
+                logger.debug(e)
+
+            # fallback to config vardef directly
+            if candidate is None:
+                candidate = cfg.get('vardef', {}).get(alias, alias)
+
+            existing_name = _pick_existing_name(self.vars, candidate)
+
+            if existing_name is not None and existing_name != alias:
+                rename_dict[existing_name] = alias
+
+        if len(rename_dict) > 0:
+            self.vars = self.vars.rename(rename_dict)
+
+        return self
 
     def _get_nc_platform_type(self, path):
         """
