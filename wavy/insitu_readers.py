@@ -234,6 +234,32 @@ def get_frost(**kwargs):
     return ds
 
 
+def _as_list(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    return [value]
+
+
+def _cfg_vardef_candidates(cfg, key, default=None):
+    vardef = cfg.get('vardef', {})
+    value = vardef.get(key, default)
+    return [v for v in _as_list(value) if v is not None]
+
+
+def _resolve_name_in_ds(ds, candidates, required=True, label='variable'):
+    available = set(ds.variables) | set(ds.coords) | set(ds.dims)
+    for cand in candidates:
+        if cand in available:
+            return cand
+    if required:
+        raise KeyError(
+            f"Could not resolve {label}. Candidates={candidates}, "
+            f"available={sorted(list(available))[:50]}"
+        )
+    return None
+
 def get_nc_thredds(**kwargs):
     sd = kwargs.get('sd')
     ed = kwargs.get('ed')
@@ -372,13 +398,39 @@ def get_nc_thredds_static_coords_single_file(**kwargs):
     pathlst = kwargs.get('pathlst')
     cfg = vars(kwargs['cfg'])
 
-    meta = ncdumpMeta(pathlst[0])
-    ncvar = [get_filevarname(v, variable_def, cfg, meta) for v in varalias]
-    lonstr = get_filevarname('lons', variable_def, cfg, meta)
-    latstr = get_filevarname('lats', variable_def, cfg, meta)
-    timestr = get_filevarname('time', variable_def, cfg, meta)
-
     ds = xr.open_dataset(pathlst[0], engine='netcdf4')
+
+    timestr = _resolve_name_in_ds(
+        ds,
+        _cfg_vardef_candidates(cfg, 'time', ['time', 'TIME']),
+        required=True,
+        label='time',
+    )
+
+    ncvar = [
+        _resolve_name_in_ds(
+            ds,
+            _cfg_vardef_candidates(cfg, v, [v]),
+            required=True,
+            label=v,
+        )
+        for v in varalias
+    ]
+
+    lonstr = _resolve_name_in_ds(
+        ds,
+        _cfg_vardef_candidates(cfg, 'lons', ['lons', 'lon', 'longitude', 'LONGITUDE', 'LON']),
+        required=False,
+        label='lons',
+    )
+
+    latstr = _resolve_name_in_ds(
+        ds,
+        _cfg_vardef_candidates(cfg, 'lats', ['lats', 'lat', 'latitude', 'LATITUDE', 'LAT']),
+        required=False,
+        label='lats',
+    )
+
     ds_sort = ds.sortby(timestr)
     ds_sliced = ds_sort.sel({timestr: slice(sd, ed)})
 
@@ -394,12 +446,12 @@ def get_nc_thredds_static_coords_single_file(**kwargs):
 
     ds_combined = xr.Dataset(
         {
-            varname: xr.DataArray(
-                data=var_sliced[varname].data,
+            varalias[i]: xr.DataArray(
+                data=var_sliced[ncvar[i]].data,
                 dims=[timestr],
                 coords={timestr: time_data},
             )
-            for varname in ncvar
+            for i in range(len(varalias))
         }
     )
 
