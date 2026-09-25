@@ -104,9 +104,53 @@ class insitu_class(qls, fc):
         if depth_lvls is not None:
             self.depth_lvls = depth_lvls
         self.cfg = dc
+
+        # measurement type filter from config or kwargs
+        self.measurement_type = str(
+            kwargs.get(
+                'measurement_type',
+                getattr(self.cfg, 'measurement_type', None)
+            )
+        ).upper() if kwargs.get('measurement_type', getattr(self.cfg, 'measurement_type', None)) is not None else None
         print(" ")
         print(" ### insitu_class object initialized ### ")
         print('# ----- ')
+
+    def _get_nc_platform_type(self, path):
+        """
+        Read platform_type from NetCDF global attrs.
+        """
+        try:
+            with xr.open_dataset(path, decode_cf=False) as ds:
+                ptype = ds.attrs.get('platform_type', None)
+                if ptype is None:
+                    return None
+                return str(ptype).strip().upper()
+        except Exception:
+            return None
+
+    def _filter_files_by_measurement_type(self, pathlst, **kwargs) -> list:
+        """
+        Keep only files matching self.measurement_type.
+        """
+        if self.measurement_type is None:
+            return pathlst
+
+        logger = logging.getLogger(__name__)
+        log_level = str(kwargs.get('logging', 'WARNING').upper())
+        logger.setLevel(getattr(logging, log_level, logging.WARNING))
+
+        filtered = []
+        for path in pathlst:
+            ptype = self._get_nc_platform_type(path)
+            if ptype == self.measurement_type:
+                filtered.append(path)
+
+        logger.info(
+            f"measurement_type={self.measurement_type}: "
+            f"{len(filtered)}/{len(pathlst)} files kept"
+        )
+        return filtered
 
     def download(self, path=None, nproc=1, **kwargs):
         logger = logging.getLogger(__name__)
@@ -414,6 +458,14 @@ class insitu_class(qls, fc):
 
         try:
             self.pathlst = self.list_input_files(**kwargs)
+
+            # filter by buoy type if requested
+            self.pathlst = self._filter_files_by_measurement_type(self.pathlst, **kwargs)
+
+            if len(self.pathlst) == 0:
+                raise FileNotFoundError(
+                    f"No files found for measurement_type={self.measurement_type}"
+                )
 
             # only possible if netcdf
             if (self._return_extension(self.pathlst[0]) == '.nc'
