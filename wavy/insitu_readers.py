@@ -298,15 +298,19 @@ def get_nc_thredds_static_coords(**kwargs):
     var_sliced = ds_sliced[ncvar]
 
     # combine and create dataset
-    ds_combined = xr.Dataset({
-            **{ncvar[i]:xr.DataArray(data=var_sliced[ncvar[i]].data,
-                                dims=[timestr],
-                                coords={timestr: var_sliced.time.data})},
-            "lons": xr.DataArray(data=lons, dims=[timestr],
-                                 coords={timestr: var_sliced.time.data}),
-            "lats": xr.DataArray(data=lats, dims=[timestr],
-                                 coords={timestr: var_sliced.time.data})
-            })
+    ds_combined = xr.Dataset(
+        {
+            varname: xr.DataArray(
+                data=var_sliced[varname].data,
+                dims=[timestr],
+                coords={timestr: var_sliced[timestr].data},
+            )
+            for varname in ncvar
+        }
+    )
+
+    ds_combined["lons"] = xr.DataArray(data=lons, dims=[timestr], coords={timestr: var_sliced[timestr].data})
+    ds_combined["lats"] = xr.DataArray(data=lats, dims=[timestr], coords={timestr: var_sliced[timestr].data})
 
     return ds_combined
 
@@ -348,15 +352,19 @@ def get_nc_thredds_static_coords_single_file(**kwargs):
 
     # combine and create dataset
     
-    ds_combined = xr.Dataset({
-            **{ncvar[i]:xr.DataArray(data=var_sliced[ncvar[i]].data,
-                                dims=[timestr],
-                                coords={timestr: var_sliced.time.data})},
-            "lons": xr.DataArray(data=lons, dims=[timestr],
-                                 coords={timestr: var_sliced.time.data}),
-            "lats": xr.DataArray(data=lats, dims=[timestr],
-                                 coords={timestr: var_sliced.time.data})
-            })
+    ds_combined = xr.Dataset(
+        {
+            varname: xr.DataArray(
+                data=var_sliced[varname].data,
+                dims=[timestr],
+                coords={timestr: var_sliced[timestr].data},
+            )
+            for varname in ncvar
+        }
+    )
+
+    ds_combined["lons"] = xr.DataArray(data=lons, dims=[timestr], coords={timestr: var_sliced[timestr].data})
+    ds_combined["lats"] = xr.DataArray(data=lats, dims=[timestr], coords={timestr: var_sliced[timestr].data})
 
     return ds_combined
 
