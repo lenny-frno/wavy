@@ -453,31 +453,6 @@ class insitu_class(qls, fc):
 
         return self
 
-    def _change_varname_to_aliases(self, **kwargs):
-        logger = logging.getLogger(__name__)
-        log_level = str(kwargs.get('logging', 'WARNING').upper())
-        logger.setLevel(getattr(logging, log_level, logging.WARNING))
-
-        # variables
-        for v in self.varalias:
-            ncvar = get_filevarname(v, variable_def,
-                                    vars(self.cfg), self.meta)
-            self.vars = self.vars.rename({ncvar: v})
-
-        # coords
-        coords = ['time', 'lons', 'lats']
-        for c in coords:
-            try:  # because only if available
-                ncvar = get_filevarname(c, variable_def,
-                                        vars(self.cfg), self.meta)
-                self.vars = self.vars.rename({ncvar: c})\
-                            .set_index(time='time')
-            except Exception as e:
-                logger.warning("Exception occurred in")
-                logger.warning("_change_varname_to_aliases")
-                logger.exception(e)
-        return self
-
     def _change_stdvarname_to_cfname(self):
         # enforce standard_name for coordinate aliases
         self.vars['lons'].attrs['standard_name'] = \
