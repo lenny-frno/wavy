@@ -465,11 +465,87 @@ class gridder_class:
 
         # Optional labeled contours of the displayed metric.
         if kwargs.get("add_contours", False):
-            contour_values = np.ma.masked_invalid(val_grid)
+
+            contour_data = np.asarray(val_grid, dtype=float).copy()
+            valid = np.isfinite(contour_data)
+
+            # Optional NaN-aware Gaussian smoothing, in grid-cell units.
+            sigma = kwargs.get("contour_smooth_sigma", 0)
+            if np.any(np.asarray(sigma) > 0):
+                from scipy.ndimage import gaussian_filter
+
+                numerator = gaussian_filter(
+                    np.where(valid, contour_data, 0.0),
+                    sigma=sigma,
+                    mode="nearest",
+                )
+                denominator = gaussian_filter(
+                    valid.astype(float),
+                    sigma=sigma,
+                    mode="nearest",
+                )
+                contour_data = np.divide(
+                    numerator,
+                    denominator,
+                    out=np.full_like(contour_data, np.nan),
+                    where=denominator > 1e-12,
+                )
+
+                # Preserve the original missing-data mask.
+                contour_data[~valid] = np.nan
+
+            contour_lon = lon_grid
+            contour_lat = lat_grid
+
+            # Optional finer plotting grid; does not change metric values
+            # stored in val_grid.
+            factor = int(kwargs.get("contour_interp_factor", 1))
+            if factor > 1 and min(contour_data.shape) >= 2:
+                from scipy.ndimage import map_coordinates
+
+                rows = np.linspace(
+                    0,
+                    contour_data.shape[0] - 1,
+                    (contour_data.shape[0] - 1) * factor + 1,
+                )
+                cols = np.linspace(
+                    0,
+                    contour_data.shape[1] - 1,
+                    (contour_data.shape[1] - 1) * factor + 1,
+                )
+                sample_coords = np.array(np.meshgrid(rows, cols, indexing="ij"))
+
+                def interpolate(array):
+                    return map_coordinates(
+                        array,
+                        sample_coords,
+                        order=1,
+                        mode="nearest",
+                        prefilter=False,
+                    )
+
+                valid = np.isfinite(contour_data)
+                weights = interpolate(valid.astype(float))
+                interpolated = interpolate(np.where(valid, contour_data, 0.0))
+
+                # Only retain points supported by valid source cells.
+                # Do not bridge missing-data gaps.
+                contour_data = np.where(
+                    weights >= 1.0 - 1e-10,
+                    interpolated,
+                    np.nan,
+                )
+                contour_lon = interpolate(np.asarray(lon_grid))
+                contour_lat = interpolate(np.asarray(lat_grid))
+
+            contour_values = np.ma.masked_invalid(contour_data)
+
             if min(contour_values.shape) >= 2 and contour_values.count() > 0:
                 contours = ax.contour(
                     lon_grid,
                     lat_grid,
+                    contour_lon,
+                    contour_lat,
                     contour_values,
                     levels=kwargs.get("contour_levels", 7),
                     transform=data_crs,
