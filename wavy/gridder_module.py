@@ -18,7 +18,10 @@ class gridder_class:
         if isinstance(varalias, list):
             if len(varalias) > 1:
                 logger.warning("Warning: gridder only expects one varalias.")
+                logger.warning("Warning: gridder only expects one varalias.")
                 logger.warning(
+                    "First varalias selected as default: {}".format(varalias[0])
+                )
                     "First varalias selected as default: {}".format(varalias[0])
                 )
                 logger.warning(
@@ -464,6 +467,25 @@ class gridder_class:
             vmin=vmin,
         )
 
+        # Optional labeled contours of the displayed metric.
+        if kwargs.get("add_contours", False):
+            contour_values = np.ma.masked_invalid(val_grid)
+            if min(contour_values.shape) >= 2 and contour_values.count() > 0:
+                contours = ax.contour(
+                    lon_grid,
+                    lat_grid,
+                    contour_values,
+                    levels=kwargs.get("contour_levels", 7),
+                    transform=data_crs,
+                    colors=kwargs.get("contour_colors", "black"),
+                    linewidths=kwargs.get("contour_linewidths", 0.8),
+                )
+                ax.clabel(
+                    contours,
+                    inline=True,
+                    fmt=kwargs.get("contour_label_fmt", "%g"),
+                    fontsize=kwargs.get("contour_label_fontsize", 8),
+                )
         cax = fig.add_axes(
             [map_rect[0] + map_rect[2] + cbar_pad, map_rect[1], cbar_width, map_rect[3]]
         )
