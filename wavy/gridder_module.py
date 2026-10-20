@@ -542,8 +542,6 @@ class gridder_class:
 
             if min(contour_values.shape) >= 2 and contour_values.count() > 0:
                 contours = ax.contour(
-                    lon_grid,
-                    lat_grid,
                     contour_lon,
                     contour_lat,
                     contour_values,
