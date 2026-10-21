@@ -552,7 +552,7 @@ class gridder_class:
                 )
                 ax.clabel(
                     contours,
-                    inline=True,
+                    inline=kwargs.get("contour_label_inline", True),
                     fmt=kwargs.get("contour_label_fmt", "%g"),
                     fontsize=kwargs.get("contour_label_fontsize", 8),
                 )
