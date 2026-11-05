@@ -22,8 +22,6 @@ class gridder_class:
                 logger.warning(
                     "First varalias selected as default: {}".format(varalias[0])
                 )
-                    "First varalias selected as default: {}".format(varalias[0])
-                )
                 logger.warning(
                     "If you want to select another variable, please "
                     + "specify with varalias argument."
