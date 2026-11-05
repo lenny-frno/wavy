@@ -652,12 +652,12 @@ class collocation_class(qls):
                         twin=0,
                     )
 
-                    logger.info("%d footprints to be collocated", len(idx))
-                    # make tmp obs_obj with filtered data
-                    tmp_dict = {}
-                    tmp_dict["time"] = self.oco.vars["time"].values[idx]
-                    tmp_dict["lats"] = self.oco.vars["lats"].values[idx]
-                    tmp_dict["lons"] = self.oco.vars["lons"].values[idx]
+                logger.info("%d footprints to be collocated", len(idx))
+                # make tmp obs_obj with filtered data
+                tmp_dict = {}
+                tmp_dict["time"] = self.oco.vars["time"].values[idx]
+                tmp_dict["lats"] = self.oco.vars["lats"].values[idx]
+                tmp_dict["lons"] = self.oco.vars["lons"].values[idx]
 
                 for v in self.varalias_obs:
                     tmp_dict[v] = self.oco.vars[v].values[idx]
